@@ -4,11 +4,13 @@
   "description": "Typescript for Nord",
   "main": "index.js",
   "scripts": {
-    "build:proto": "scripts/protoc-generate.sh && rm ./src/gen/action_pb.js",
+    "build:proto": "scripts/protoc-generate.sh && rm -f ./src/gen/action_pb.js",
     "test": "mocha -r ts-node/register test/*.ts",
     "docs": "npx typedoc --out ./docs ./src",
     "build": "npm run build:proto && npm run docs",
-    "clean": "rm -rf ./src/gen && rm -rf docs"
+    "clean": "rm -rf ./src/gen && rm -rf docs",
+    "lint": "yarn eslint --fix --ext .ts src",
+    "fmt": "yarn prettier --write src"
   },
   "repository": {
     "type": "git",
@@ -18,21 +20,29 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@types/chai": "^4.3.5",
-    "@types/mocha": "^10.0.1",
+    "@types/google-protobuf": "^3.15.10",
     "@types/node": "^20.2.3",
-    "chai": "^4.3.8",
-    "mocha": "^10.2.0",
+    "@types/node-fetch": "^2.6.9",
+    "@typescript-eslint/eslint-plugin": "^6.4.0",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-config-standard-with-typescript": "^42.0.0",
+    "eslint-plugin-import": "^2.25.2",
+    "eslint-plugin-n": "^15.0.0 || ^16.0.0 ",
+    "eslint-plugin-promise": "^6.0.0",
+    "prettier": "^3.1.1",
+    "protoc-gen-js": "^3.21.2",
+    "protoc-gen-ts": "^0.8.7",
     "ts-node": "^10.9.1",
     "ts-proto": "^1.156.7",
     "typedoc": "^0.25.0",
-    "typescript": "^5.0.4"
+    "typescript": "*"
   },
   "dependencies": {
     "@noble/curves": "^1.2.0",
     "@noble/hashes": "^1.3.2",
-    "@types/node-fetch": "^2.6.4",
     "decimal.js": "^10.4.3",
+    "google-protobuf": "^3.21.2",
     "node-fetch": "2.6.13"
   }
 }

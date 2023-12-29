@@ -1,27 +1,24 @@
 import { Decimal } from "decimal.js";
-import * as proto from "./gen/action";
+import * as proto from "./gen/nord";
 import { ed25519 } from "@noble/curves/ed25519";
 import { bls12_381 as bls } from "@noble/curves/bls12-381";
 import { secp256k1 as secp } from "@noble/curves/secp256k1";
 import { sha256 } from "@noble/hashes/sha256";
-import { ActionKind, ActionKindTag, KeyType } from "./types";
+import { KeyType, type Market, type Token } from "./types";
 import fetch from "node-fetch";
 
+export const SESSION_TTL = 10 * 60;
 export const ZERO_DECIMAL = new Decimal(0);
 
-const MAX_MANTISSA = BigInt(2) ** BigInt(96) - BigInt(1);
-const MAX_DECIMAL_SCALE = 28;
 const NORD_URL = "http://localhost:3000/action";
-
-const NEG_BIT = 128; // 0b1000_0000
 const MAX_PAYLOAD_SIZE = 100 * 1000; // 100 kB
 
 /**
  * Sends a post request to the defined NORD_URL endpoint.
  * @param payload - The message data to send.
- * @returns Response data in JSON format.
+ * @returns Response data in Uint8Array.
  */
-export async function sendMessage(payload: Uint8Array): Promise<any> {
+export async function sendMessage(payload: Uint8Array): Promise<Uint8Array> {
   try {
     const response = await fetch(NORD_URL, {
       method: "POST",
@@ -30,7 +27,8 @@ export async function sendMessage(payload: Uint8Array): Promise<any> {
       },
       body: payload,
     });
-    return response.json();
+    const buffer = await response.arrayBuffer();
+    return new Uint8Array(buffer);
   } catch (e: any) {
     return e;
   }
@@ -52,7 +50,7 @@ export function signAction(
   if (keyType === KeyType.Ed25119) {
     sig = ed25519.sign(action, sk);
   } else if (keyType === KeyType.Bls12_381) {
-    sig = bls.signShortSignature(action, sk);
+    sig = bls.sign(action, sk);
   } else if (keyType === KeyType.Secp256k1) {
     sig = secp.sign(sha256(action), sk).toCompactRawBytes();
   } else {
@@ -62,122 +60,12 @@ export function signAction(
 }
 
 /**
- * Converts a Decimal type to a protobuf Decimal format.
- * @param x - Decimal value to convert.
- * @returns Encoded Decimal in protobuf format.
+ * Converts a number to number type with the shift.
+ * @param x - value to convert.
+ * @returns number.
  */
-export function toPbDecimal(x: Decimal): proto.Action_Decimal {
-  Decimal.set({ toExpPos: 29, toExpNeg: -29 });
-
-  let strX = x.toString();
-  let isNeg: boolean = false;
-
-  if (x.isNeg()) {
-    isNeg = true;
-    strX = strX.substring(1);
-  }
-
-  const scale = x.dp();
-  if (scale > MAX_DECIMAL_SCALE) {
-    throw new Error("Cannot input a decimal with more than 28 d.p.");
-  }
-
-  let mantissa: bigint;
-  if (scale > 0) {
-    mantissa = BigInt(strX.toString().replace(".", ""));
-  } else {
-    mantissa = BigInt(strX.toString());
-  }
-  if (mantissa > MAX_MANTISSA) {
-    throw new Error("Mantissa has to be <= 2^96 - 1");
-  }
-
-  let bits = mantissa.toString(2);
-  if (bits.length < 96) {
-    bits = bits.padStart(96, "0");
-  }
-
-  let firstByte = scale;
-  if (isNeg) {
-    firstByte |= NEG_BIT;
-  }
-
-  let mantissaBuf = bigintToBuf(mantissa).reverse(); // little-endian
-
-  let cc = Buffer.concat([Uint8Array.from([firstByte]), mantissaBuf]);
-
-  return proto.Action_Decimal.create({
-    encodedDecimal: cc,
-  });
-}
-
-function bigintToBuf(a: bigint): Uint8Array {
-  if (a < 0)
-    throw RangeError(
-      "a should be a non-negative integer. Negative values are not supported",
-    );
-  return hexToBuf(a.toString(16));
-}
-
-function hexToBuf(hexStr: string): Uint8Array {
-  let hex = parseHex(hexStr);
-  hex = parseHex(hexStr, Math.ceil(hex.length / 2)); // pad to have a length in bytes
-  return Uint8Array.from(
-    hex.match(/[\da-fA-F]{2}/g)!.map((h) => {
-      // eslint-disable-line
-      return parseInt(h, 16);
-    }),
-  );
-}
-
-function parseHex(a: string, byteLength?: number): string {
-  const hexMatch = a.match(/^(0x)?([\da-fA-F]+)$/);
-  if (hexMatch == null) {
-    throw new RangeError(
-      "Input must be a hexadecimal string, e.g. '0x124fe3a' or '0214f1b2'.",
-    );
-  }
-  let hex = hexMatch[2];
-  if (byteLength !== undefined) {
-    if (byteLength < hex.length / 2) {
-      throw new RangeError(
-        `Expected byte length ${byteLength} < input hex byte length ${Math.ceil(
-          hex.length / 2,
-        )}.`,
-      );
-    }
-    hex = hex.padStart(byteLength * 2, "0");
-  }
-  return hex;
-}
-
-/**
- * Creates a proto.Action object.
- * @param actionKind - the ActionKind to set for the proto.Action object.
- * @param setAction - tag that must be set if ActionKind === (proto.Action_Deposit || proto.Action_Withdraw) to differentiate between the action kinds.
- * @returns A new proto.Action object.
- */
-export function createAction(actionKind: ActionKind): proto.Action {
-  const action = proto.Action.create({
-    currentTimestamp: getCurrentTimestamp(),
-    nonce: getNonce(),
-  });
-
-  if (actionKind.tag === ActionKindTag.CreateUser)
-    action.createUser = actionKind;
-  else if (actionKind.tag === ActionKindTag.CreateSession)
-    action.createSession = actionKind;
-  else if (actionKind.tag === ActionKindTag.Deposit)
-    action.deposit = actionKind;
-  else if (actionKind.tag === ActionKindTag.Withdraw)
-    action.withdraw = actionKind;
-  else if (actionKind.tag === ActionKindTag.PlaceOrder)
-    action.placeOrder = actionKind;
-  else if (actionKind.tag === ActionKindTag.CancelOrderById)
-    action.cancelOrderById = actionKind;
-  else throw Error("Invalid action kind tag.");
-
-  return action;
+export function toShiftedNumber(x: number, collateralDecimals: number): number {
+  return x * Math.pow(10, collateralDecimals);
 }
 
 /**
@@ -185,12 +73,25 @@ export function createAction(actionKind: ActionKind): proto.Action {
  * @param a - Action object to encode.
  * @returns Encoded Action as Uint8Array.
  */
-export function encodeDelimited(a: proto.Action): Uint8Array {
-  const e = proto.Action.encode(a).finish();
+export function encodeDelimited(a: proto.nord.Action): Uint8Array {
+  const e: Uint8Array = a.serialize();
   if (e.byteLength > MAX_PAYLOAD_SIZE) {
     throw new Error("Encoded action can't be greater than 100 kB.");
   }
   return new Uint8Array([...toVarint(e.byteLength), ...e]);
+}
+
+/**
+ * Decodes a Receipt in length-delimited format.
+ * @param u - Encoded Receipt as Uint8Array to decode.
+ * @returns Decoded Receipt as Uint8Array.
+ */
+export function decodeDelimited(u: Uint8Array): proto.nord.Receipt {
+  let index = 0;
+  while (u[index] >> 7 > 0) {
+    index++;
+  }
+  return proto.nord.Receipt.deserialize(u.slice(index + 1));
 }
 
 /**
@@ -217,7 +118,7 @@ export function toVarint(x: number): Uint8Array {
 
   x |= 0;
 
-  let r: number[] = [];
+  const r: number[] = [];
   while (x !== 0) {
     r.push(x & 0b1111111);
     x >>= 7;
@@ -230,12 +131,28 @@ export function toVarint(x: number): Uint8Array {
   return Uint8Array.from(r);
 }
 
+export function checkPubKeyLength(keyType: KeyType, len: number): void {
+  if (keyType === KeyType.Bls12_381) {
+    throw new Error(
+      "Cannot create a user using Bls12_381, use Ed25119 or Secp256k1 instead.",
+    );
+  }
+
+  if (len !== 32 && keyType === KeyType.Ed25119) {
+    throw new Error("Ed25119 pubkeys must be 32 length.");
+  }
+
+  if (len !== 33 && keyType === KeyType.Secp256k1) {
+    throw new Error("Secp256k1 pubkeys must be 33 length.");
+  }
+}
+
 /**
  * Retrieves the current timestamp.
  * @returns Current timestamp as a bigint.
  */
-export function getCurrentTimestamp(): bigint {
-  return BigInt(Math.floor(Date.now() / 1000));
+export function getCurrentTimestamp(): number {
+  return Math.floor(Date.now() / 1000);
 }
 
 let _lastTs = 0;
@@ -245,7 +162,7 @@ let _lastNonce = 0;
  * @returns Generated nonce as a number.
  */
 export function getNonce(): number {
-  let ts = Date.now() / 1000;
+  const ts = Date.now() / 1000;
   if (ts === _lastTs) {
     _lastNonce += 1;
   } else {
@@ -253,4 +170,18 @@ export function getNonce(): number {
     _lastNonce = 0;
   }
   return _lastNonce;
+}
+
+export function findMarket(markets: Market[], marketId: number): Market {
+  if (marketId < 0 || markets.length - 1 < marketId) {
+    throw new Error(`The market with marketId=${marketId} not found`);
+  }
+  return markets[marketId];
+}
+
+export function findToken(tokens: Token[], tokenId: number): Token {
+  if (tokenId < 0 || tokens.length - 1 < tokenId) {
+    throw new Error(`The token with tokenId=${tokenId} not found`);
+  }
+  return tokens[tokenId];
 }

@@ -1,22 +1,12 @@
-import { Decimal } from "decimal.js";
-import * as proto from "./gen/action";
+import * as proto from "./gen/nord";
 
-export type ActionKind =
-  | (proto.Action_CreateUser & { tag: ActionKindTag.CreateUser })
-  | (proto.Action_CreateSession & { tag: ActionKindTag.CreateSession })
-  | (proto.Action_Deposit & { tag: ActionKindTag.Deposit })
-  | (proto.Action_Withdraw & { tag: ActionKindTag.Withdraw })
-  | (proto.Action_CancelOrderById & { tag: ActionKindTag.CancelOrderById })
-  | (proto.Action_PlaceOrder & { tag: ActionKindTag.PlaceOrder });
-
-export enum ActionKindTag {
-  CreateUser,
-  CreateSession,
-  Deposit,
-  Withdraw,
-  CancelOrderById,
-  PlaceOrder,
-}
+export type Actions =
+  | proto.nord.Action.CreateUser
+  | proto.nord.Action.CreateSession
+  | proto.nord.Action.Deposit
+  | proto.nord.Action.Withdraw
+  | proto.nord.Action.CancelOrderById
+  | proto.nord.Action.PlaceOrder;
 
 export interface CreateUserParams {
   keyType: KeyType;
@@ -24,22 +14,22 @@ export interface CreateUserParams {
 }
 
 export interface DepositParams {
-  collateralId: number;
+  tokenId: number;
   userId: number;
-  amount: Decimal;
+  amount: number;
 }
 
 export interface WithdrawParams {
-  collateralId: number;
+  tokenId: number;
   userId: number;
-  amount: Decimal;
+  amount: number;
 }
 
 export interface CreateSessionParams {
   userId: number;
-  // Must be 96 bytes.
-  blstPubkey: Uint8Array;
-  expiryTs: bigint;
+  keyType: KeyType;
+  pubkey: Uint8Array;
+  expiryTs: number;
 }
 
 export interface PlaceOrderParams {
@@ -48,15 +38,15 @@ export interface PlaceOrderParams {
   side: Side;
   fillMode: FillMode;
   isReduceOnly: boolean;
-  price?: Decimal;
-  size: Decimal;
+  price: number;
+  size: number;
   sessionId: number;
 }
 
 export interface CancelOrderParams {
   marketId: number;
   userId: number;
-  orderId: bigint;
+  orderId: number;
   sessionId: number;
 }
 
@@ -78,6 +68,22 @@ export enum FillMode {
   FillOrKill,
 }
 
+export interface NordConfig {
+  url: string;
+  privateKey?: Uint8Array;
+}
+
+export interface Market {
+  symbol: string;
+  price_decimals: number;
+  size_decimals: number;
+}
+
+export interface Token {
+  symbol: string;
+  decimals: number;
+}
+
 /**
  * Converts a `FillMode` enum to its corresponding protobuf representation.
  *
@@ -85,11 +91,12 @@ export enum FillMode {
  * @returns The corresponding protobuf fill mode.
  * @throws Will throw an error if provided with an invalid fill mode.
  */
-export function fillModeToProtoFillMode(x: FillMode): proto.Action_FillMode {
-  if (x === FillMode.Limit) return proto.Action_FillMode.LIMIT;
-  if (x === FillMode.PostOnly) return proto.Action_FillMode.POST_ONLY;
-  if (x === FillMode.ImmediateOrCancel)
-    return proto.Action_FillMode.IMMEDIATE_OR_CANCEL;
-  if (x === FillMode.FillOrKill) return proto.Action_FillMode.FILL_OR_KILL;
+export function fillModeToProtoFillMode(x: FillMode): proto.nord.FillMode {
+  if (x === FillMode.Limit) return proto.nord.FillMode.LIMIT;
+  if (x === FillMode.PostOnly) return proto.nord.FillMode.POST_ONLY;
+  if (x === FillMode.ImmediateOrCancel) {
+    return proto.nord.FillMode.IMMEDIATE_OR_CANCEL;
+  }
+  if (x === FillMode.FillOrKill) return proto.nord.FillMode.FILL_OR_KILL;
   throw new Error("Invalid fill mode");
 }

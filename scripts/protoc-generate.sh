@@ -4,7 +4,7 @@
 ROOT_DIR=$(git rev-parse --show-toplevel)
 
 # Path to Protoc Plugin
-TS_PROTO_PATH="${ROOT_DIR}/ts/node_modules/.bin/protoc-gen-ts_proto"
+TS_PROTO_PATH="${ROOT_DIR}/ts/node_modules/.bin/protoc-gen-ts"
 
 # Directory holding all .proto files
 SRC_DIR="${ROOT_DIR}/engine"
@@ -25,3 +25,4 @@ protoc \
     --ts_out="${OUT_DIR}" \
     --proto_path="${SRC_DIR}" \
     $(find "${SRC_DIR}" -iname "*.proto")
+

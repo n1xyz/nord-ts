@@ -1,89 +1,75 @@
 # nord-ts
 
-This package provides an interface to interact with the Nord exchange. Functionality includes generating Action messages, signing with Ed25119, Secp256k1 and Bls12_381, and sending payloads. There are also various util functions and interfaces provided.
+This package provides an interface to interact with the Nord exchange. Functionality includes generating Action messages, signing with `Ed25119` and sending payloads. There are also various util functions and interfaces provided.
 
 ## Installation
 
+### npm
+
 ```bash
-npm install nord-ts | yarn add nord-ts
+npm install nord-ts
+```
+
+### yarn
+
+```bash
+yarn add nord-ts
 ```
 
 ## Features
 
-- generate Action messages ( createUser | createSession | deposit | withdraw | placeOrder | cancelOrderById )
-- Cryptographic support for `Ed25119`, `Secp256k1`, and `Bls12_381` key types.
+- create a new client with a new user and a new session ( `createClient` )
+- generate Action messages ( `deposit` | `withdraw` | `placeOrder` | `cancelOrderById` )
+- Cryptographic support for `Ed25119` key types.
 - Message signing and transmission capabilities.
-- Data serialization and encoding for protobuf.
+- Data serialization and deserialization for protobuf.
 
 ## Usage
 
 ### Basic Example
 
 ```typescript
-import { Nord, types, utils } from "nord-ts";
+import { Nord, types } from "nord-ts";
 
-import Decimal from "decimal.js";
-import { ed25519 } from "@noble/curves/ed25519";
-import { bls12_381 as bls } from "@noble/curves/bls12-381";
-import { secp256k1 as secp } from "@noble/curves/secp256k1";
+const c = await Nord.createClient({url: 'http://localhost:3000'});
 
-const ed25519Sk: Uint8Array = Uint8Array.from([0xff, 0xff, 0xff, ..., 0xff]);
-const ed25519Pk: Uint8Array = ed25519.getPublicKey(ed25519Sk);
+const tokenId = 0;
+try {
+    await c.deposit(tokenId, 10000000);
+} catch (e) {
+    console.log(`couldn't do deposit, reason: ${e}`)
+}
 
-const blsSk: Uint8Array = Uint8Array.from([0xff, 0xff, 0xff, ..., 0xff]);
-const blsPk: Uint8Array = bls.getPublicKeyForShortSignatures(blsSk);
+try {
+    await c.withdraw(tokenId, 100);
+} catch (e) {
+    console.log(`couldn't do withdraw, reason: ${e}`)
+}
 
-const createUserMsg: Uint8Array = Nord.createUser({
-  keyType: types.KeyType.Ed25119,
-  pubkey: ed25519Pk,
-});
-const createUserPayload: Uint8Array = utils.signAction(
-  createUserMsg,
-  ed25519Sk,
-  types.KeyType.Ed25119
-);
-await utils.sendMessage(createUserPayload);
+const marketId = 0;
+const size = 1;
+const price = 1;
+const isReduceOnly = false;
+let orderID: number = 0;
+try {
+    orderId = await c.placeOrder(
+        marketId,
+        Side.Ask,
+        FillMode.Limit,
+        isReduceOnly,
+        size,
+        price
+    );
+} catch (e) {
+    console.log(`couldn't do placeOrder, reason: ${e}`)
+}
 
-const createSessionMsg: Uint8Array = Nord.createSession({
-  userId,
-  blstPubkey: blsPk,
-  expiryTs: 1700000000n,
-});
-const createSessionPayload: Uint8Array = utils.signAction(
-  createSessionMsg,
-  ed25519Sk,
-  types.KeyType.Ed25119
-);
-await utils.sendMessage(createSessionPayload);
-
-
-const depositMsg: Uint8Array = Nord.deposit({
-  collateralId,
-  userId,
-  amount: new Decimal("120938128903.1234567"),
-});
-const depositPayload = utils.signAction(
-  depositMsg,
-  blsSk,
-  types.KeyType.Bls12_381
-);
-await utils.sendMessage(depositPayload);
-
-const placeOrderMsg: Uint8Array = Nord.placeOrder({
-  userId,
-  marketId,
-  side: types.Side.Bid,
-  fillMode: types.FillMode.Limit,
-  isReduceOnly: false,
-  price: new Decimal("56.3"),
-  size: new Decimal("420.567"),
-  sessionId,
-});
-const placeOrderPayload = utils.signAction(
-  placeOrderMsg,
-  blsSk,
-  types.KeyType.Bls12_381
-);
-await utils.sendMessage(placeOrderPayload);
-
+try {
+    await c.cancelOrder(
+        marketId,
+        orderId
+    );
+} catch (e) {
+    console.log(`couldn't do cancelOrder, reason: ${e}`)
+}
 ```
