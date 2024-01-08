@@ -64,8 +64,8 @@ export function signAction(
  * @param x - value to convert.
  * @returns number.
  */
-export function toShiftedNumber(x: number, collateralDecimals: number): number {
-  return x * Math.pow(10, collateralDecimals);
+export function toShiftedNumber(x: number, tokenDecimals: number): number {
+  return x * Math.pow(10, tokenDecimals);
 }
 
 /**

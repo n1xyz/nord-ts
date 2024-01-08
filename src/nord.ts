@@ -421,7 +421,7 @@ export function deposit(params: DepositParams): Uint8Array {
     current_timestamp: getCurrentTimestamp(),
     nonce: getNonce(),
     deposit: new proto.nord.Action.Deposit({
-      collateral_id: params.tokenId,
+      token_id: params.tokenId,
       user_id: params.userId,
       amount: params.amount,
     }),
@@ -449,7 +449,7 @@ export function withdraw(params: WithdrawParams): Uint8Array {
     current_timestamp: getCurrentTimestamp(),
     nonce: getNonce(),
     withdraw: new proto.nord.Action.Withdraw({
-      collateral_id: params.tokenId,
+      token_id: params.tokenId,
       user_id: params.userId,
       amount: params.amount,
     }),
