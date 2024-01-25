@@ -75,13 +75,18 @@ export interface NordConfig {
 
 export interface Market {
   symbol: string;
-  price_decimals: number;
-  size_decimals: number;
+  priceDecimals: number;
+  sizeDecimals: number;
 }
 
 export interface Token {
   symbol: string;
   decimals: number;
+}
+
+export interface Info {
+  markets: Market[];
+  tokens: Token[];
 }
 
 /**

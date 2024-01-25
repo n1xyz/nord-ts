@@ -23,8 +23,9 @@ import {
   type WithdrawParams,
   type NordConfig,
   type Market,
-  type FillMode,
   type Token,
+  type Info,
+  type FillMode,
 } from "./types";
 import fetch from "node-fetch";
 import { ed25519 } from "@noble/curves/ed25519";
@@ -47,8 +48,12 @@ class CreateUserMessage {
   async send(): Promise<number> {
     const signature = ed25519.sign(this.message, this.privateKey);
     const body = new Uint8Array([...this.message, ...signature]);
-    const resp = await sendMessage(body);
-    return decodeDelimited(resp).create_user_result.user_id;
+    const resp = decodeDelimited(await sendMessage(body));
+    if (resp.has_err) {
+      throw new Error(`Could not create a new user, reason: ${resp.err}`);
+    }
+
+    return resp.create_user_result.user_id;
   }
 }
 
@@ -77,8 +82,12 @@ class CreateSessionMessage {
   async send(): Promise<number> {
     const signature = ed25519.sign(this.message, this.privateKey);
     const body = new Uint8Array([...this.message, ...signature]);
-    const resp = await sendMessage(body);
-    return decodeDelimited(resp).create_session_result.session_id;
+    const resp = decodeDelimited(await sendMessage(body));
+    if (resp.has_err) {
+      throw new Error(`Could not create a new session, reason: ${resp.err}`);
+    }
+
+    return resp.create_session_result.session_id;
   }
 }
 
@@ -108,7 +117,10 @@ class DepositMessage {
   async send(): Promise<void> {
     const signature = ed25519.sign(this.message, this.privateKey);
     const body = new Uint8Array([...this.message, ...signature]);
-    await sendMessage(body);
+    const resp = decodeDelimited(await sendMessage(body));
+    if (resp.has_err) {
+      throw new Error(`Could not deposit, reason: ${resp.err}`);
+    }
     // Receipt for Deposit does not implemented
   }
 }
@@ -139,7 +151,10 @@ class WithdrawMessage {
   async send(): Promise<void> {
     const signature = ed25519.sign(this.message, this.privateKey);
     const body = new Uint8Array([...this.message, ...signature]);
-    await sendMessage(body);
+    const resp = decodeDelimited(await sendMessage(body));
+    if (resp.has_err) {
+      throw new Error(`Could not withdraw, reason: ${resp.err}`);
+    }
     // Receipt for Withdraw does not implemented
   }
 }
@@ -181,8 +196,12 @@ class PlaceOrderMessage {
   async send(): Promise<number> {
     const signature = ed25519.sign(this.message, this.privateKey);
     const body = new Uint8Array([...this.message, ...signature]);
-    const resp = await sendMessage(body);
-    return decodeDelimited(resp).place_order_result.posted.order_id;
+    const resp = decodeDelimited(await sendMessage(body));
+    if (resp.has_err) {
+      throw new Error(`Could not place the order, reason: ${resp.err}`);
+    }
+
+    return resp.place_order_result.posted.order_id;
   }
 }
 
@@ -213,8 +232,12 @@ class CancelOrderMessage {
   async send(): Promise<number> {
     const signature = ed25519.sign(this.message, this.privateKey);
     const body = new Uint8Array([...this.message, ...signature]);
-    const resp = await sendMessage(body);
-    return decodeDelimited(resp).cancel_order_result.cancelled.order_id;
+    const resp = decodeDelimited(await sendMessage(body));
+    if (resp.has_err) {
+      throw new Error(`Could not cancel the order, reason: ${resp.err}`);
+    }
+
+    return resp.cancel_order_result.cancelled.order_id;
   }
 }
 
@@ -248,10 +271,10 @@ export class Nord {
     }
     const nord = new Nord(privateKey);
     nord.url = config.url;
-    let response = await fetch(`${config.url}/markets`, { method: "GET" });
-    nord.markets = await response.json();
-    response = await fetch(`${config.url}/tokens`, { method: "GET" });
-    nord.tokens = await response.json();
+    const response = await fetch(`${config.url}/info`, { method: "GET" });
+    const info: Info = await response.json();
+    nord.markets = info.markets;
+    nord.tokens = info.tokens;
     nord.userId = await nord.createUser();
     nord.sessionId = await nord.createSession(nord.userId);
     return nord;
@@ -315,8 +338,8 @@ export class Nord {
     const message = new PlaceOrderMessage(
       `${this.url}/action`,
       this.privateKey,
-      findMarket(this.markets, marketId).size_decimals,
-      findMarket(this.markets, marketId).price_decimals,
+      findMarket(this.markets, marketId).sizeDecimals,
+      findMarket(this.markets, marketId).priceDecimals,
       this.userId,
       this.sessionId,
       marketId,
