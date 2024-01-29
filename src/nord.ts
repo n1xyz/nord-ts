@@ -237,7 +237,7 @@ class CancelOrderMessage {
       throw new Error(`Could not cancel the order, reason: ${resp.err}`);
     }
 
-    return resp.cancel_order_result.cancelled.order_id;
+    return resp.cancel_order_result.order_id;
   }
 }
 
