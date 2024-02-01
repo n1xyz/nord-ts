@@ -12,9 +12,7 @@ import {
   findToken,
 } from "./utils";
 import {
-  type CreateUserParams,
   type CreateSessionParams,
-  type DepositParams,
   type PlaceOrderParams,
   type CancelOrderParams,
   KeyType,
@@ -29,33 +27,6 @@ import {
 } from "./types";
 import fetch from "node-fetch";
 import { ed25519 } from "@noble/curves/ed25519";
-
-class CreateUserMessage {
-  url: string;
-  message: Uint8Array;
-  privateKey: Uint8Array;
-
-  constructor(url: string, publicKey: Uint8Array, privateKey: Uint8Array) {
-    this.url = url;
-    this.privateKey = privateKey;
-
-    this.message = createUser({
-      keyType: KeyType.Ed25119,
-      pubkey: publicKey,
-    });
-  }
-
-  async send(): Promise<number> {
-    const signature = ed25519.sign(this.message, this.privateKey);
-    const body = new Uint8Array([...this.message, ...signature]);
-    const resp = decodeDelimited(await sendMessage(body));
-    if (resp.has_err) {
-      throw new Error(`Could not create a new user, reason: ${resp.err}`);
-    }
-
-    return resp.create_user_result.user_id;
-  }
-}
 
 class CreateSessionMessage {
   url: string;
@@ -88,40 +59,6 @@ class CreateSessionMessage {
     }
 
     return resp.create_session_result.session_id;
-  }
-}
-
-class DepositMessage {
-  url: string;
-  message: Uint8Array;
-  privateKey: Uint8Array;
-
-  constructor(
-    url: string,
-    privateKey: Uint8Array,
-    sizeDecimals: number,
-    tokenId: number,
-    userId: number,
-    amount: number,
-  ) {
-    this.url = url;
-    this.privateKey = privateKey;
-
-    this.message = deposit({
-      tokenId,
-      userId,
-      amount: toShiftedNumber(amount, sizeDecimals),
-    });
-  }
-
-  async send(): Promise<void> {
-    const signature = ed25519.sign(this.message, this.privateKey);
-    const body = new Uint8Array([...this.message, ...signature]);
-    const resp = decodeDelimited(await sendMessage(body));
-    if (resp.has_err) {
-      throw new Error(`Could not deposit, reason: ${resp.err}`);
-    }
-    // Receipt for Deposit does not implemented
   }
 }
 
@@ -275,19 +212,8 @@ export class Nord {
     const info: Info = await response.json();
     nord.markets = info.markets;
     nord.tokens = info.tokens;
-    nord.userId = await nord.createUser();
     nord.sessionId = await nord.createSession(nord.userId);
     return nord;
-  }
-
-  private async createUser(): Promise<number> {
-    const message = new CreateUserMessage(
-      `${this.url}/action`,
-      this.publicKey,
-      this.privateKey,
-    );
-
-    return await message.send();
   }
 
   private async createSession(userId: number): Promise<number> {
@@ -299,19 +225,6 @@ export class Nord {
     );
 
     return await message.send();
-  }
-
-  async deposit(tokenId: number, amount: number): Promise<void> {
-    const message = new DepositMessage(
-      `${this.url}/action`,
-      this.privateKey,
-      findToken(this.tokens, tokenId).decimals,
-      tokenId,
-      this.userId,
-      amount,
-    );
-
-    await message.send();
   }
 
   async withdraw(tokenId: number, amount: number): Promise<void> {
@@ -368,33 +281,6 @@ export class Nord {
 }
 
 /**
- * Generates a createUser action payload.
- *
- * @param params - Parameters to create a new user.
- * @param params.keyType - The cryptographic key type.
- * @param params.pubkey - The public key of the user.
- * @returns Encoded message as Uint8Array.
- * @throws Will throw an error if using unsupported key type or invalid pubkey length.
- */
-export function createUser(params: CreateUserParams): Uint8Array {
-  checkPubKeyLength(params.keyType, params.pubkey.length);
-
-  const pbCreateUser = proto.nord.Action.fromObject({
-    current_timestamp: getCurrentTimestamp(),
-    nonce: getNonce(),
-    create_user: new proto.nord.Action.CreateUser({
-      key_type:
-        params.keyType === KeyType.Ed25119
-          ? proto.nord.KeyType.ED25119
-          : proto.nord.KeyType.SECP256K1,
-      pubkey: params.pubkey,
-    }),
-  });
-
-  return encodeDelimited(pbCreateUser);
-}
-
-/**
  * Generates a createSession action payload.
  *
  * @param params - Parameters to create a new session.
@@ -422,35 +308,6 @@ export function createSession(params: CreateSessionParams): Uint8Array {
   });
 
   return encodeDelimited(pbCreateSession);
-}
-
-/**
- * Generates a deposit action payload.
- *
- * @param params - Parameters for deposit.
- * @param params.tokenId - ID of the token.
- * @param params.userId - ID of the user.
- * @param params.amount - Amount to deposit.
- * @returns Encoded message as Uint8Array.
- * @throws Will throw an error if deposit amount is 0 or less.
- */
-export function deposit(params: DepositParams): Uint8Array {
-  // if (params.amount.lessThan(ZERO_DECIMAL)) {
-  if (params.amount < 0) {
-    throw new Error("Cannot deposit 0 or less.");
-  }
-
-  const pbDeposit = proto.nord.Action.fromObject({
-    current_timestamp: getCurrentTimestamp(),
-    nonce: getNonce(),
-    deposit: new proto.nord.Action.Deposit({
-      token_id: params.tokenId,
-      user_id: params.userId,
-      amount: params.amount,
-    }),
-  });
-
-  return encodeDelimited(pbDeposit);
 }
 
 /**

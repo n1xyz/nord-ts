@@ -1,17 +1,11 @@
 import * as proto from "./gen/nord";
 
 export type Actions =
-  | proto.nord.Action.CreateUser
   | proto.nord.Action.CreateSession
   | proto.nord.Action.Deposit
   | proto.nord.Action.Withdraw
   | proto.nord.Action.CancelOrderById
   | proto.nord.Action.PlaceOrder;
-
-export interface CreateUserParams {
-  keyType: KeyType;
-  pubkey: Uint8Array;
-}
 
 export interface DepositParams {
   tokenId: number;
