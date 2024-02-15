@@ -62,9 +62,14 @@ export enum FillMode {
   FillOrKill,
 }
 
-export interface NordConfig {
+export interface ClientConfig {
   url: string;
   privateKey?: Uint8Array;
+}
+
+export interface SubsriberConfig {
+  streamURL: string;
+  maxBufferLen?: number;
 }
 
 export interface Market {
@@ -81,6 +86,14 @@ export interface Token {
 export interface Info {
   markets: Market[];
   tokens: Token[];
+}
+
+export interface DeltaEvent {
+  last_update_id: number;
+  update_id: number;
+  market_symbol: string;
+  asks: [number, number];
+  bids: [number, number];
 }
 
 /**

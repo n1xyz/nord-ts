@@ -9,6 +9,7 @@ import fetch from "node-fetch";
 
 export const SESSION_TTL = 10 * 60;
 export const ZERO_DECIMAL = new Decimal(0);
+export const MAX_BUFFER_LEN = 10_000;
 
 const NORD_URL = "http://localhost:3000/action";
 const MAX_PAYLOAD_SIZE = 100 * 1000; // 100 kB

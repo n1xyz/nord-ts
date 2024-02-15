@@ -2,6 +2,7 @@ import * as proto from "./gen/nord";
 import {
   encodeDelimited,
   SESSION_TTL,
+  MAX_BUFFER_LEN,
   toShiftedNumber,
   getCurrentTimestamp,
   getNonce,
@@ -13,20 +14,24 @@ import {
 } from "./utils";
 import {
   type CreateSessionParams,
+  type DepositParams,
   type PlaceOrderParams,
   type CancelOrderParams,
   KeyType,
   Side,
   fillModeToProtoFillMode,
   type WithdrawParams,
-  type NordConfig,
+  type ClientConfig,
+  type SubsriberConfig,
   type Market,
   type Token,
+  type DeltaEvent,
   type Info,
   type FillMode,
 } from "./types";
 import fetch from "node-fetch";
 import { ed25519 } from "@noble/curves/ed25519";
+import WebSocket from "ws";
 
 class CreateSessionMessage {
   url: string;
@@ -59,6 +64,40 @@ class CreateSessionMessage {
     }
 
     return resp.create_session_result.session_id;
+  }
+}
+
+class DepositMessage {
+  url: string;
+  message: Uint8Array;
+  privateKey: Uint8Array;
+
+  constructor(
+    url: string,
+    privateKey: Uint8Array,
+    sizeDecimals: number,
+    tokenId: number,
+    userId: number,
+    amount: number,
+  ) {
+    this.url = url;
+    this.privateKey = privateKey;
+
+    this.message = deposit({
+      tokenId,
+      userId,
+      amount: toShiftedNumber(amount, sizeDecimals),
+    });
+  }
+
+  async send(): Promise<void> {
+    const signature = ed25519.sign(this.message, this.privateKey);
+    const body = new Uint8Array([...this.message, ...signature]);
+    const resp = decodeDelimited(await sendMessage(body));
+    if (resp.has_err) {
+      throw new Error(`Could not deposit, reason: ${resp.err}`);
+    }
+    // Receipt for Deposit does not implemented
   }
 }
 
@@ -201,7 +240,7 @@ export class Nord {
     this.sessionId = 0;
   }
 
-  public static async createClient(config: NordConfig): Promise<Nord> {
+  public static async createClient(config: ClientConfig): Promise<Nord> {
     let privateKey = config.privateKey;
     if (privateKey === undefined) {
       privateKey = ed25519.utils.randomPrivateKey();
@@ -225,6 +264,19 @@ export class Nord {
     );
 
     return await message.send();
+  }
+
+  async deposit(tokenId: number, amount: number): Promise<void> {
+    const message = new DepositMessage(
+      `${this.url}/action`,
+      this.privateKey,
+      findToken(this.tokens, tokenId).decimals,
+      tokenId,
+      this.userId,
+      amount,
+    );
+
+    await message.send();
   }
 
   async withdraw(tokenId: number, amount: number): Promise<void> {
@@ -280,6 +332,46 @@ export class Nord {
   }
 }
 
+export class Subscriber {
+  streamURL: string;
+  buffer: DeltaEvent[];
+  maxBufferLen: number;
+
+  constructor(config: SubsriberConfig) {
+    this.streamURL = config.streamURL;
+    this.buffer = [];
+    this.maxBufferLen = config.maxBufferLen ?? MAX_BUFFER_LEN;
+  }
+
+  subsribe(): void {
+    const ws = new WebSocket(this.streamURL);
+
+    ws.on("open", () => {
+      console.log(`Connected to ${this.streamURL}`);
+    });
+
+    ws.on("message", (rawData) => {
+      const message: string = rawData.toLocaleString();
+      const event: DeltaEvent = JSON.parse(message);
+      if (!this.checkEvent(event)) {
+        return;
+      }
+      this.buffer.push(event);
+      if (this.buffer.length > this.maxBufferLen) {
+        this.buffer.shift();
+      }
+    });
+
+    ws.on("close", () => {
+      console.log(`Disconnected from ${this.streamURL}`);
+    });
+  }
+
+  checkEvent(event: DeltaEvent): boolean {
+    return true;
+  }
+}
+
 /**
  * Generates a createSession action payload.
  *
@@ -308,6 +400,34 @@ export function createSession(params: CreateSessionParams): Uint8Array {
   });
 
   return encodeDelimited(pbCreateSession);
+}
+
+/**
+ * Generates a deposit action payload.
+ *
+ * @param params - Parameters for deposit.
+ * @param params.tokenId - ID of the token.
+ * @param params.userId - ID of the user.
+ * @param params.amount - Amount to deposit.
+ * @returns Encoded message as Uint8Array.
+ * @throws Will throw an error if deposit amount is 0 or less.
+ */
+export function deposit(params: DepositParams): Uint8Array {
+  // if (params.amount.lessThan(ZERO_DECIMAL)) {
+  if (params.amount < 0) {
+    throw new Error("Cannot deposit 0 or less.");
+  }
+
+  const pbDeposit = proto.nord.Action.fromObject({
+    current_timestamp: getCurrentTimestamp(),
+    nonce: getNonce(),
+    deposit: new proto.nord.Action.Deposit({
+      token_id: params.tokenId,
+      amount: params.amount,
+    }),
+  });
+
+  return encodeDelimited(pbDeposit);
 }
 
 /**

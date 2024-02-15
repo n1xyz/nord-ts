@@ -19,14 +19,16 @@ yarn add nord-ts
 ## Features
 
 - create a new client with a new user and a new session ( `createClient` )
-- generate Action messages ( `withdraw` | `placeOrder` | `cancelOrderById` )
+- generate Action messages ( `deposit` | `withdraw` | `placeOrder` | `cancelOrderById` )
 - Cryptographic support for `Ed25119` key types.
 - Message signing and transmission capabilities.
 - Data serialization and deserialization for protobuf.
 
 ## Usage
 
-### Basic Example
+### Basic Examples
+
+#### Client
 
 ```typescript
 import { Nord, types } from "nord-ts";
@@ -34,6 +36,11 @@ import { Nord, types } from "nord-ts";
 const c = await Nord.createClient({url: 'http://localhost:3000'});
 
 const tokenId = 0;
+try {
+    await c.deposit(tokenId, 10000000);
+} catch (e) {
+    console.log(`couldn't do deposit, reason: ${e}`)
+}
 
 try {
     await c.withdraw(tokenId, 100);
@@ -67,4 +74,19 @@ try {
 } catch (e) {
     console.log(`couldn't do cancelOrder, reason: ${e}`)
 }
+```
+
+#### Subscriber
+
+```typescript
+import { Subscriber } from "./nord";
+
+const STREAM_URL =
+  "ws://localhost:3000/ws/trades@BTCUSDC&deltas@BTCUSDC&user@0";
+
+const s = new Subscriber({
+  streamURL: STREAM_URL,
+  maxBufferLen: 100,
+});
+s.subsribe();
 ```
