@@ -31,7 +31,15 @@ import {
 } from "./types";
 import fetch from "node-fetch";
 import { ed25519 } from "@noble/curves/ed25519";
+import { secp256k1 } from "@noble/curves/secp256k1";
+import { sha256 } from "@noble/hashes/sha256";
 import WebSocket from "ws";
+
+const assert = (pred: boolean): void => {
+  if (!pred) {
+    throw new Error("assertion violation");
+  }
+};
 
 class CreateSessionMessage {
   url: string;
@@ -40,23 +48,25 @@ class CreateSessionMessage {
 
   constructor(
     url: string,
-    publicKey: Uint8Array,
-    privateKey: Uint8Array,
+    sessionPubkey: Uint8Array,
+    userPrivateKey: Uint8Array,
     userId: number,
   ) {
     this.url = url;
-    this.privateKey = privateKey;
+    this.privateKey = userPrivateKey;
 
     this.message = createSession({
       userId,
       keyType: KeyType.Ed25119,
-      pubkey: publicKey,
+      pubkey: sessionPubkey,
       expiryTs: getCurrentTimestamp() + SESSION_TTL,
     });
   }
 
   async send(): Promise<number> {
-    const signature = ed25519.sign(this.message, this.privateKey);
+    const hash = sha256(this.message);
+    const signature = secp256k1.sign(hash, this.privateKey).toCompactRawBytes();
+    assert(signature.length === 64);
     const body = new Uint8Array([...this.message, ...signature]);
     const resp = decodeDelimited(await sendMessage(body));
     if (resp.has_err) {
@@ -226,6 +236,7 @@ export class Nord {
   privateKey: Uint8Array;
   publicKey: Uint8Array;
   userId: number;
+  sessionSk: Uint8Array;
   sessionId: number;
 
   constructor(privateKey: NonNullable<Uint8Array>) {
@@ -235,35 +246,52 @@ export class Nord {
     this.message = new Uint8Array();
     this.signature = new Uint8Array();
     this.privateKey = privateKey;
-    this.publicKey = ed25519.getPublicKey(this.privateKey);
+    this.publicKey = secp256k1.getPublicKey(this.privateKey, true);
     this.userId = 0;
+    this.sessionSk = new Uint8Array();
     this.sessionId = 0;
+
+    assert(this.privateKey.length === 32);
+    assert(this.publicKey.length === 33);
   }
 
-  public static async createClient(config: ClientConfig): Promise<Nord> {
-    let privateKey = config.privateKey;
-    if (privateKey === undefined) {
-      privateKey = ed25519.utils.randomPrivateKey();
-    }
+  public static async createClient({
+    url,
+    privateKey,
+  }: ClientConfig): Promise<Nord> {
     const nord = new Nord(privateKey);
-    nord.url = config.url;
-    const response = await fetch(`${config.url}/info`, { method: "GET" });
+    nord.url = url;
+    const pubkeyHex = Buffer.from(nord.publicKey).toString("hex");
+    const response = await fetch(`${url}/info`, { method: "GET" });
     const info: Info = await response.json();
+    const userId = await fetch(`${url}/user_id?pubkey=${pubkeyHex}`)
+      .then(async (r) => await r.json())
+      .then((u) => Number(u));
     nord.markets = info.markets;
     nord.tokens = info.tokens;
-    nord.sessionId = await nord.createSession(nord.userId);
+    nord.userId = userId;
+
+    await nord.refreshSession(nord.userId);
     return nord;
   }
 
-  private async createSession(userId: number): Promise<number> {
+  private async refreshSession(userId: number): Promise<void> {
+    const sessionSk = ed25519.utils.randomPrivateKey();
+    const sessionVk = ed25519.getPublicKey(sessionSk);
+
+    assert(sessionSk.length === 32);
+    assert(sessionVk.length === 32);
+
     const message = new CreateSessionMessage(
       `${this.url}/action`,
-      this.publicKey,
+      sessionVk,
       this.privateKey,
       userId,
     );
+    const sessionId = await message.send();
 
-    return await message.send();
+    this.sessionId = sessionId;
+    this.sessionSk = sessionSk;
   }
 
   async deposit(tokenId: number, amount: number): Promise<void> {

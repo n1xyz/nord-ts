@@ -33,7 +33,10 @@ yarn add nord-ts
 ```typescript
 import { Nord, types } from "nord-ts";
 
-const c = await Nord.createClient({url: 'http://localhost:3000'});
+const c = await Nord.createClient({
+  url: 'http://localhost:3000',
+  privateKey: /* secp256k1 sec1 compressed secret key */,
+});
 
 const tokenId = 0;
 try {

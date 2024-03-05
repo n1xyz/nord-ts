@@ -64,7 +64,7 @@ export enum FillMode {
 
 export interface ClientConfig {
   url: string;
-  privateKey?: Uint8Array;
+  privateKey: Uint8Array;
 }
 
 export interface SubsriberConfig {
