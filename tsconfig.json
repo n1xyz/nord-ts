@@ -1,17 +1,37 @@
 {
   "compilerOptions": {
-    "target": "es2020",
-    "lib": ["es2020"],
-    "module": "commonjs",
-    "rootDir": ".",
-    "moduleResolution": "Node",
-    "outDir": "./dist",
+    "target": "es6",
+    "module": "esnext",
+    "moduleResolution": "node",
+    "outDir": "./dist/esm",
+    "allowJs": true,
+    "lib": [
+      "es2019",
+      "es6",
+      "dom"
+    ],
+    "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
+    "strict": false,
+    "isolatedModules": true,
+    "noImplicitAny": false,
     "forceConsistentCasingInFileNames": true,
-    "strict": true,
-    "skipLibCheck": true
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "allowUnreachableCode": false,
+    "composite": true,
+    "rootDir": "src/"
   },
-  "exclude": ["dist","**/node_modules/**/*"],
-  "include": ["./src/**/*"]
+  "typedocOptions": {
+    "entryPoints": [
+      "src/index.ts"
+    ],
+    "out": "docs"
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.js",
+    "src/**/*.json"
+  ]
 }

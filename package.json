@@ -2,7 +2,9 @@
   "name": "nord-ts",
   "version": "0.0.1",
   "description": "Typescript for Nord",
-  "main": "index.js",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
   "scripts": {
     "build:proto": "scripts/protoc-generate.sh && rm -f ./src/gen/action_pb.js",
     "test": "mocha -r ts-node/register test/*.ts",
