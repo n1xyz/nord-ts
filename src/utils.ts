@@ -83,6 +83,19 @@ export function encodeDelimited(a: proto.nord.Action): Uint8Array {
 }
 
 /**
+ * Decodes an Action in length-delimited format.
+ * @param u - Encoded Action as Uint8Array to decode.
+ * @returns Decoded Action as Uint8Array.
+ */
+export function decodeActionDelimited(u: Uint8Array): proto.nord.Action {
+  let index = 0;
+  while (u[index] >> 7 > 0) {
+    index++;
+  }
+  return proto.nord.Action.deserialize(u.slice(index + 1));
+}
+
+/**
  * Decodes a Receipt in length-delimited format.
  * @param u - Encoded Receipt as Uint8Array to decode.
  * @returns Decoded Receipt as Uint8Array.
