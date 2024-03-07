@@ -14,6 +14,66 @@ export const MAX_BUFFER_LEN = 10_000;
 const NORD_URL = "http://localhost:3000/action";
 const MAX_PAYLOAD_SIZE = 100 * 1000; // 100 kB
 
+const ROLLMAN_URL = "http://localhost:9248/block_query";
+const PROMETHEUS_URL = "http://localhost:9090/api/v1/query";
+
+/**
+ * Query the transactions in the specified L2 block.
+ * @field {number} block_number specifies the block number to query.
+ *                 If not specified, transactions from latest block
+                   are returned.
+ */
+export type BlockQuery = {
+  block_number?: number;
+};
+
+/**
+ * Response for BlockQuery.
+ * @field {number} block_number specifies the block number being returned.
+ * @field {BlockActions} actions are the list of transactions from the block.
+ */
+export type BlockQueryResponse = {
+  block_number: number;
+  actions: Array<ActionInfo>;
+};
+
+/**
+ * Info about the block transaction.
+ * @field {number} action_id is the action identifier.
+ * @field {Action} action is the action.
+ */
+export type ActionInfo = {
+  action_id: number;
+  action: proto.nord.Action;
+};
+
+/**
+ * Aggregate metrics
+ * @field {number} blocks_total: Total number of L2 blocks.
+ * @field {number} tx_total: Total number of transactions.
+ * @field {number} tx_tps: Transaction throughput.
+ * @field {number} tx_tps_peak: Peak transaction throughput.
+ * @field {number} request_latency_average: Average request latency.
+ */
+export type AggregateMetrics = {
+  blocks_total: number;
+  tx_total: number;
+  tx_tps: number;
+  tx_tps_peak: number;
+  request_latency_average: number;
+};
+
+// The formats returned by rollman.
+type RollmanBlockQueryResponse = {
+  block_number: number;
+  actions: Array<RollmanActionInfo>;
+};
+
+type RollmanActionInfo = {
+  action_id: number;
+  action_pb: Uint8Array;
+};
+
 /**
  * Sends a post request to the defined NORD_URL endpoint.
  * @param payload - The message data to send.
@@ -87,7 +147,7 @@ export function encodeDelimited(a: proto.nord.Action): Uint8Array {
  * @param u - Encoded Action as Uint8Array to decode.
  * @returns Decoded Action as Uint8Array.
  */
-export function decodeActionDelimited(u: Uint8Array): proto.nord.Action {
+function decodeActionDelimited(u: Uint8Array): proto.nord.Action {
   let index = 0;
   while (u[index] >> 7 > 0) {
     index++;
@@ -198,4 +258,79 @@ export function findToken(tokens: Token[], tokenId: number): Token {
     throw new Error(`The token with tokenId=${tokenId} not found`);
   }
   return tokens[tokenId];
+}
+
+/**
+ * Performs the block query.
+ * @param query -Query params.
+ * @returns the block transactions.
+ */
+export async function queryBlock(
+  query: BlockQuery,
+): Promise<BlockQueryResponse> {
+  let rollman_response: RollmanBlockQueryResponse = await queryRollman(query);
+  let query_response: BlockQueryResponse = {
+    block_number: rollman_response.block_number,
+    actions: [],
+  };
+
+  for (var rollman_action of rollman_response.actions) {
+    const block_action: ActionInfo = {
+      action_id: rollman_action.action_id,
+      action: decodeActionDelimited(rollman_action.action_pb),
+    };
+    query_response.actions.push(block_action);
+  }
+  return query_response;
+}
+
+/**
+ * Gets the aggregate metrics.
+ * @returns the aggregate metrics.
+ */
+export async function aggregateMetrics(): Promise<AggregateMetrics> {
+  // Get the latest block number for L2 blocks.
+  let block_query: BlockQuery = {};
+  let rollman_response: RollmanBlockQueryResponse =
+    await queryRollman(block_query);
+  const blocks_total = rollman_response.block_number;
+
+  let metrics: AggregateMetrics = {
+    blocks_total: rollman_response.block_number,
+    tx_total: await queryPrometheus("nord_requests_count"),
+    tx_tps: await queryPrometheus("rate(nord_requests_count[1m])"),
+    tx_tps_peak: 99, // TODO
+    request_latency_average: await queryPrometheus(
+      'nord_requests_latency{quantile="0.5"}',
+    ),
+  };
+  return metrics;
+}
+
+// Helper to query rollman.
+async function queryRollman(
+  query: BlockQuery,
+): Promise<RollmanBlockQueryResponse> {
+  let url = ROLLMAN_URL;
+  if (query.block_number != null) {
+    url = url + "?block_number=" + query.block_number;
+  }
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error("Rollman query failed " + url);
+  }
+  const rollman_response: RollmanBlockQueryResponse = await response.json();
+  return rollman_response;
+}
+
+// Helper to query prometheus.
+async function queryPrometheus(params: string): Promise<number> {
+  let url = PROMETHEUS_URL + "?query=" + params;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error("Prometheus query failed " + url);
+  }
+  const json = await response.json();
+  // Prometheus HTTP API: https://prometheus.io/docs/prometheus/latest/querying/api/
+  return Number(json.data.result[0].value[1]);
 }
