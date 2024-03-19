@@ -15,6 +15,63 @@ const NORD_URL = "http://localhost:3000/action";
 const MAX_PAYLOAD_SIZE = 100 * 1000; // 100 kB
 
 /**
+ * Query the transactions in the specified L2 block.
+ * @field {number} block_number specifies the block number to query.
+ *                 If not specified, transactions from latest block
+                   are returned.
+ */
+export interface BlockQuery {
+  block_number?: number;
+}
+
+/**
+ * Response for BlockQuery.
+ * @field {number} block_number specifies the block number being returned.
+ * @field {BlockActions} actions are the list of transactions from the block.
+ */
+export interface BlockQueryResponse {
+  block_number: number;
+  actions: ActionInfo[];
+}
+
+/**
+ * Info about the block transaction.
+ * @field {number} action_id is the action identifier.
+ * @field {Action} action is the action.
+ */
+export interface ActionInfo {
+  action_id: number;
+  action: proto.nord.Action;
+}
+
+/**
+ * Aggregate metrics
+ * @field {number} blocks_total: Total number of L2 blocks.
+ * @field {number} tx_total: Total number of transactions.
+ * @field {number} tx_tps: Transaction throughput.
+ * @field {number} tx_tps_peak: Peak transaction throughput.
+ * @field {number} request_latency_average: Average request latency.
+ */
+export interface AggregateMetrics {
+  blocks_total: number;
+  tx_total: number;
+  tx_tps: number;
+  tx_tps_peak: number;
+  request_latency_average: number;
+}
+
+// The formats returned by rollman.
+interface RollmanBlockQueryResponse {
+  block_number: number;
+  actions: RollmanActionInfo[];
+}
+
+interface RollmanActionInfo {
+  action_id: number;
+  action_pb: Uint8Array;
+}
+
+/**
  * Sends a post request to the defined NORD_URL endpoint.
  * @param payload - The message data to send.
  * @returns Response data in Uint8Array.
@@ -80,6 +137,19 @@ export function encodeDelimited(a: proto.nord.Action): Uint8Array {
     throw new Error("Encoded action can't be greater than 100 kB.");
   }
   return new Uint8Array([...toVarint(e.byteLength), ...e]);
+}
+
+/**
+ * Decodes an Action in length-delimited format.
+ * @param u - Encoded Action as Uint8Array to decode.
+ * @returns Decoded Action as Uint8Array.
+ */
+function decodeActionDelimited(u: Uint8Array): proto.nord.Action {
+  let index = 0;
+  while (u[index] >> 7 > 0) {
+    index++;
+  }
+  return proto.nord.Action.deserialize(u.slice(index + 1));
 }
 
 /**
@@ -185,4 +255,81 @@ export function findToken(tokens: Token[], tokenId: number): Token {
     throw new Error(`The token with tokenId=${tokenId} not found`);
   }
   return tokens[tokenId];
+}
+
+export class NordMetrics {
+  private readonly rollmanUrl: string;
+  private readonly prometheusUrl: string;
+
+  constructor({
+    rollmanUrl,
+    prometheusUrl,
+  }: Readonly<{ rollmanUrl: string; prometheusUrl: string }>) {
+    this.rollmanUrl = rollmanUrl + "/block_query";
+    this.prometheusUrl = prometheusUrl + "/api/v1/query";
+  }
+
+  // Query the block metrics from rollman.
+  async queryBlock(query: BlockQuery): Promise<BlockQueryResponse> {
+    const rollmanResponse: RollmanBlockQueryResponse =
+      await this.queryRollman(query);
+    const queryResponse: BlockQueryResponse = {
+      block_number: rollmanResponse.block_number,
+      actions: [],
+    };
+
+    for (const rollmanAction of rollmanResponse.actions) {
+      const blockAction: ActionInfo = {
+        action_id: rollmanAction.action_id,
+        action: decodeActionDelimited(rollmanAction.action_pb),
+      };
+      queryResponse.actions.push(blockAction);
+    }
+    return queryResponse;
+  }
+
+  // Query the aggregate metrics across nord and rollman.
+  async aggregateMetrics(): Promise<AggregateMetrics> {
+    // Get the latest block number for L2 blocks.
+    const blockQuery: BlockQuery = {};
+    const rollmanResponse: RollmanBlockQueryResponse =
+      await this.queryRollman(blockQuery);
+
+    const metrics: AggregateMetrics = {
+      blocks_total: rollmanResponse.block_number,
+      tx_total: await this.queryPrometheus("nord_requests_count"),
+      tx_tps: await this.queryPrometheus("rate(nord_requests_count[1m])"),
+      tx_tps_peak: 99, // TODO
+      request_latency_average: await this.queryPrometheus(
+        'nord_requests_latency{quantile="0.5"}',
+      ),
+    };
+    return metrics;
+  }
+
+  // Helper to query rollman.
+  async queryRollman(query: BlockQuery): Promise<RollmanBlockQueryResponse> {
+    let url = this.rollmanUrl;
+    if (query.block_number != null) {
+      url = url + "?block_number=" + query.block_number;
+    }
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error("Rollman query failed " + url);
+    }
+    const rollmanResponse: RollmanBlockQueryResponse = await response.json();
+    return rollmanResponse;
+  }
+
+  // Helper to query prometheus.
+  async queryPrometheus(params: string): Promise<number> {
+    const url = this.prometheusUrl + "?query=" + params;
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error("Prometheus query failed " + url);
+    }
+    const json = await response.json();
+    // Prometheus HTTP API: https://prometheus.io/docs/prometheus/latest/querying/api/
+    return Number(json.data.result[0].value[1]);
+  }
 }

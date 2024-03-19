@@ -13,7 +13,7 @@
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "strict": false,
+    "strict": true,
     "isolatedModules": true,
     "noImplicitAny": false,
     "forceConsistentCasingInFileNames": true,
@@ -21,7 +21,9 @@
     "noFallthroughCasesInSwitch": true,
     "allowUnreachableCode": false,
     "composite": true,
-    "rootDir": "src/"
+    "rootDir": "src/",
+    "skipLibCheck": true,
+    "declaration": true
   },
   "typedocOptions": {
     "entryPoints": [
