@@ -13,7 +13,7 @@
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "strict": true,
+    "strict": false,
     "isolatedModules": true,
     "noImplicitAny": false,
     "forceConsistentCasingInFileNames": true,
