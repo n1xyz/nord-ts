@@ -1,5 +1,6 @@
-import * as Nord from "./nord";
+export * from "./nord";
+
 import * as types from "./types";
 import * as utils from "./utils";
 
-export { Nord, types, utils };
+export { types, utils };

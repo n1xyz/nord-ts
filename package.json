@@ -2,15 +2,18 @@
   "name": "nord-ts",
   "version": "0.0.1",
   "description": "Typescript for Nord",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
+    "dev": "nodemon --exec npx tsc",
     "build:proto": "scripts/protoc-generate.sh && rm -f ./src/gen/action_pb.js",
     "test": "mocha -r ts-node/register test/*.ts",
     "docs": "npx typedoc --out ./docs ./src",
     "build": "npm run build:proto && npm run docs",
     "clean": "rm -rf ./src/gen && rm -rf docs",
     "lint": "yarn eslint --fix --ext .ts src",
-    "fmt": "yarn prettier --write src"
+    "fmt": "yarn prettier --write src",
+    "tsc-build": "tsc"
   },
   "repository": {
     "type": "git",
