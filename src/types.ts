@@ -1,17 +1,11 @@
 import * as proto from "./gen/nord";
 
 export type Actions =
-  | proto.nord.Action.CreateUser
   | proto.nord.Action.CreateSession
   | proto.nord.Action.Deposit
   | proto.nord.Action.Withdraw
   | proto.nord.Action.CancelOrderById
   | proto.nord.Action.PlaceOrder;
-
-export interface CreateUserParams {
-  keyType: KeyType;
-  pubkey: Uint8Array;
-}
 
 export interface DepositParams {
   tokenId: number;
@@ -68,20 +62,38 @@ export enum FillMode {
   FillOrKill,
 }
 
-export interface NordConfig {
+export interface ClientConfig {
   url: string;
-  privateKey?: Uint8Array;
+  privateKey: Uint8Array;
+}
+
+export interface SubsriberConfig {
+  streamURL: string;
+  maxBufferLen?: number;
 }
 
 export interface Market {
   symbol: string;
-  price_decimals: number;
-  size_decimals: number;
+  priceDecimals: number;
+  sizeDecimals: number;
 }
 
 export interface Token {
   symbol: string;
   decimals: number;
+}
+
+export interface Info {
+  markets: Market[];
+  tokens: Token[];
+}
+
+export interface DeltaEvent {
+  last_update_id: number;
+  update_id: number;
+  market_symbol: string;
+  asks: [number, number];
+  bids: [number, number];
 }
 
 /**

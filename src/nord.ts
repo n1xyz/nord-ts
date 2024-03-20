@@ -2,6 +2,7 @@ import * as proto from "./gen/nord";
 import {
   encodeDelimited,
   SESSION_TTL,
+  MAX_BUFFER_LEN,
   toShiftedNumber,
   getCurrentTimestamp,
   getNonce,
@@ -12,7 +13,6 @@ import {
   findToken,
 } from "./utils";
 import {
-  type CreateUserParams,
   type CreateSessionParams,
   type DepositParams,
   type PlaceOrderParams,
@@ -21,36 +21,25 @@ import {
   Side,
   fillModeToProtoFillMode,
   type WithdrawParams,
-  type NordConfig,
+  type ClientConfig,
+  type SubsriberConfig,
   type Market,
-  type FillMode,
   type Token,
+  type DeltaEvent,
+  type Info,
+  type FillMode,
 } from "./types";
 import fetch from "node-fetch";
 import { ed25519 } from "@noble/curves/ed25519";
+import { secp256k1 } from "@noble/curves/secp256k1";
+import { sha256 } from "@noble/hashes/sha256";
+import WebSocket from "ws";
 
-class CreateUserMessage {
-  url: string;
-  message: Uint8Array;
-  privateKey: Uint8Array;
-
-  constructor(url: string, publicKey: Uint8Array, privateKey: Uint8Array) {
-    this.url = url;
-    this.privateKey = privateKey;
-
-    this.message = createUser({
-      keyType: KeyType.Ed25119,
-      pubkey: publicKey,
-    });
+const assert = (pred: boolean): void => {
+  if (!pred) {
+    throw new Error("assertion violation");
   }
-
-  async send(): Promise<number> {
-    const signature = ed25519.sign(this.message, this.privateKey);
-    const body = new Uint8Array([...this.message, ...signature]);
-    const resp = await sendMessage(body);
-    return decodeDelimited(resp).create_user_result.user_id;
-  }
-}
+};
 
 class CreateSessionMessage {
   url: string;
@@ -59,26 +48,32 @@ class CreateSessionMessage {
 
   constructor(
     url: string,
-    publicKey: Uint8Array,
-    privateKey: Uint8Array,
+    sessionPubkey: Uint8Array,
+    userPrivateKey: Uint8Array,
     userId: number,
   ) {
     this.url = url;
-    this.privateKey = privateKey;
+    this.privateKey = userPrivateKey;
 
     this.message = createSession({
       userId,
       keyType: KeyType.Ed25119,
-      pubkey: publicKey,
+      pubkey: sessionPubkey,
       expiryTs: getCurrentTimestamp() + SESSION_TTL,
     });
   }
 
   async send(): Promise<number> {
-    const signature = ed25519.sign(this.message, this.privateKey);
+    const hash = sha256(this.message);
+    const signature = secp256k1.sign(hash, this.privateKey).toCompactRawBytes();
+    assert(signature.length === 64);
     const body = new Uint8Array([...this.message, ...signature]);
-    const resp = await sendMessage(body);
-    return decodeDelimited(resp).create_session_result.session_id;
+    const resp = decodeDelimited(await sendMessage(body));
+    if (resp.has_err) {
+      throw new Error(`Could not create a new session, reason: ${resp.err}`);
+    }
+
+    return resp.create_session_result.session_id;
   }
 }
 
@@ -108,7 +103,10 @@ class DepositMessage {
   async send(): Promise<void> {
     const signature = ed25519.sign(this.message, this.privateKey);
     const body = new Uint8Array([...this.message, ...signature]);
-    await sendMessage(body);
+    const resp = decodeDelimited(await sendMessage(body));
+    if (resp.has_err) {
+      throw new Error(`Could not deposit, reason: ${resp.err}`);
+    }
     // Receipt for Deposit does not implemented
   }
 }
@@ -139,7 +137,10 @@ class WithdrawMessage {
   async send(): Promise<void> {
     const signature = ed25519.sign(this.message, this.privateKey);
     const body = new Uint8Array([...this.message, ...signature]);
-    await sendMessage(body);
+    const resp = decodeDelimited(await sendMessage(body));
+    if (resp.has_err) {
+      throw new Error(`Could not withdraw, reason: ${resp.err}`);
+    }
     // Receipt for Withdraw does not implemented
   }
 }
@@ -181,8 +182,12 @@ class PlaceOrderMessage {
   async send(): Promise<number> {
     const signature = ed25519.sign(this.message, this.privateKey);
     const body = new Uint8Array([...this.message, ...signature]);
-    const resp = await sendMessage(body);
-    return decodeDelimited(resp).place_order_result.posted.order_id;
+    const resp = decodeDelimited(await sendMessage(body));
+    if (resp.has_err) {
+      throw new Error(`Could not place the order, reason: ${resp.err}`);
+    }
+
+    return resp.place_order_result.posted.order_id;
   }
 }
 
@@ -213,8 +218,12 @@ class CancelOrderMessage {
   async send(): Promise<number> {
     const signature = ed25519.sign(this.message, this.privateKey);
     const body = new Uint8Array([...this.message, ...signature]);
-    const resp = await sendMessage(body);
-    return decodeDelimited(resp).cancel_order_result.cancelled.order_id;
+    const resp = decodeDelimited(await sendMessage(body));
+    if (resp.has_err) {
+      throw new Error(`Could not cancel the order, reason: ${resp.err}`);
+    }
+
+    return resp.cancel_order_result.order_id;
   }
 }
 
@@ -227,6 +236,7 @@ export class Nord {
   privateKey: Uint8Array;
   publicKey: Uint8Array;
   userId: number;
+  sessionSk: Uint8Array;
   sessionId: number;
 
   constructor(privateKey: NonNullable<Uint8Array>) {
@@ -236,46 +246,52 @@ export class Nord {
     this.message = new Uint8Array();
     this.signature = new Uint8Array();
     this.privateKey = privateKey;
-    this.publicKey = ed25519.getPublicKey(this.privateKey);
+    this.publicKey = secp256k1.getPublicKey(this.privateKey, true);
     this.userId = 0;
+    this.sessionSk = new Uint8Array();
     this.sessionId = 0;
+
+    assert(this.privateKey.length === 32);
+    assert(this.publicKey.length === 33);
   }
 
-  public static async createClient(config: NordConfig): Promise<Nord> {
-    let privateKey = config.privateKey;
-    if (privateKey === undefined) {
-      privateKey = ed25519.utils.randomPrivateKey();
-    }
+  public static async createClient({
+    url,
+    privateKey,
+  }: ClientConfig): Promise<Nord> {
     const nord = new Nord(privateKey);
-    nord.url = config.url;
-    let response = await fetch(`${config.url}/markets`, { method: "GET" });
-    nord.markets = await response.json();
-    response = await fetch(`${config.url}/tokens`, { method: "GET" });
-    nord.tokens = await response.json();
-    nord.userId = await nord.createUser();
-    nord.sessionId = await nord.createSession(nord.userId);
+    nord.url = url;
+    const pubkeyHex = Buffer.from(nord.publicKey).toString("hex");
+    const response = await fetch(`${url}/info`, { method: "GET" });
+    const info: Info = await response.json();
+    const userId = await fetch(`${url}/user_id?pubkey=${pubkeyHex}`)
+      .then(async (r) => await r.json())
+      .then((u) => Number(u));
+    nord.markets = info.markets;
+    nord.tokens = info.tokens;
+    nord.userId = userId;
+
+    await nord.refreshSession(nord.userId);
     return nord;
   }
 
-  private async createUser(): Promise<number> {
-    const message = new CreateUserMessage(
-      `${this.url}/action`,
-      this.publicKey,
-      this.privateKey,
-    );
+  private async refreshSession(userId: number): Promise<void> {
+    const sessionSk = ed25519.utils.randomPrivateKey();
+    const sessionVk = ed25519.getPublicKey(sessionSk);
 
-    return await message.send();
-  }
+    assert(sessionSk.length === 32);
+    assert(sessionVk.length === 32);
 
-  private async createSession(userId: number): Promise<number> {
     const message = new CreateSessionMessage(
       `${this.url}/action`,
-      this.publicKey,
+      sessionVk,
       this.privateKey,
       userId,
     );
+    const sessionId = await message.send();
 
-    return await message.send();
+    this.sessionId = sessionId;
+    this.sessionSk = sessionSk;
   }
 
   async deposit(tokenId: number, amount: number): Promise<void> {
@@ -315,8 +331,8 @@ export class Nord {
     const message = new PlaceOrderMessage(
       `${this.url}/action`,
       this.privateKey,
-      findMarket(this.markets, marketId).size_decimals,
-      findMarket(this.markets, marketId).price_decimals,
+      findMarket(this.markets, marketId).sizeDecimals,
+      findMarket(this.markets, marketId).priceDecimals,
       this.userId,
       this.sessionId,
       marketId,
@@ -344,31 +360,44 @@ export class Nord {
   }
 }
 
-/**
- * Generates a createUser action payload.
- *
- * @param params - Parameters to create a new user.
- * @param params.keyType - The cryptographic key type.
- * @param params.pubkey - The public key of the user.
- * @returns Encoded message as Uint8Array.
- * @throws Will throw an error if using unsupported key type or invalid pubkey length.
- */
-export function createUser(params: CreateUserParams): Uint8Array {
-  checkPubKeyLength(params.keyType, params.pubkey.length);
+export class Subscriber {
+  streamURL: string;
+  buffer: DeltaEvent[];
+  maxBufferLen: number;
 
-  const pbCreateUser = proto.nord.Action.fromObject({
-    current_timestamp: getCurrentTimestamp(),
-    nonce: getNonce(),
-    create_user: new proto.nord.Action.CreateUser({
-      key_type:
-        params.keyType === KeyType.Ed25119
-          ? proto.nord.KeyType.ED25119
-          : proto.nord.KeyType.SECP256K1,
-      pubkey: params.pubkey,
-    }),
-  });
+  constructor(config: SubsriberConfig) {
+    this.streamURL = config.streamURL;
+    this.buffer = [];
+    this.maxBufferLen = config.maxBufferLen ?? MAX_BUFFER_LEN;
+  }
 
-  return encodeDelimited(pbCreateUser);
+  subsribe(): void {
+    const ws = new WebSocket(this.streamURL);
+
+    ws.on("open", () => {
+      console.log(`Connected to ${this.streamURL}`);
+    });
+
+    ws.on("message", (rawData) => {
+      const message: string = rawData.toLocaleString();
+      const event: DeltaEvent = JSON.parse(message);
+      if (!this.checkEvent(event)) {
+        return;
+      }
+      this.buffer.push(event);
+      if (this.buffer.length > this.maxBufferLen) {
+        this.buffer.shift();
+      }
+    });
+
+    ws.on("close", () => {
+      console.log(`Disconnected from ${this.streamURL}`);
+    });
+  }
+
+  checkEvent(event: DeltaEvent): boolean {
+    return true;
+  }
 }
 
 /**
@@ -421,8 +450,7 @@ export function deposit(params: DepositParams): Uint8Array {
     current_timestamp: getCurrentTimestamp(),
     nonce: getNonce(),
     deposit: new proto.nord.Action.Deposit({
-      collateral_id: params.tokenId,
-      user_id: params.userId,
+      token_id: params.tokenId,
       amount: params.amount,
     }),
   });
@@ -449,7 +477,7 @@ export function withdraw(params: WithdrawParams): Uint8Array {
     current_timestamp: getCurrentTimestamp(),
     nonce: getNonce(),
     withdraw: new proto.nord.Action.Withdraw({
-      collateral_id: params.tokenId,
+      token_id: params.tokenId,
       user_id: params.userId,
       amount: params.amount,
     }),

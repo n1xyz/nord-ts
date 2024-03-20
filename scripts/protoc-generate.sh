@@ -13,7 +13,7 @@ SRC_DIR="${ROOT_DIR}/engine"
 OUT_DIR="${ROOT_DIR}/ts/src/gen"
 
 # Clean all existing generated files
-rm -r "${OUT_DIR}"
+rm -rf "${OUT_DIR}"
 mkdir "${OUT_DIR}"
 
 # Generate all messages

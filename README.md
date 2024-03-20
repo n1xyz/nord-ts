@@ -26,12 +26,17 @@ yarn add nord-ts
 
 ## Usage
 
-### Basic Example
+### Basic Examples
+
+#### Client
 
 ```typescript
 import { Nord, types } from "nord-ts";
 
-const c = await Nord.createClient({url: 'http://localhost:3000'});
+const c = await Nord.createClient({
+  url: 'http://localhost:3000',
+  privateKey: /* secp256k1 sec1 compressed secret key */,
+});
 
 const tokenId = 0;
 try {
@@ -72,4 +77,19 @@ try {
 } catch (e) {
     console.log(`couldn't do cancelOrder, reason: ${e}`)
 }
+```
+
+#### Subscriber
+
+```typescript
+import { Subscriber } from "./nord";
+
+const STREAM_URL =
+  "ws://localhost:3000/ws/trades@BTCUSDC&deltas@BTCUSDC&user@0";
+
+const s = new Subscriber({
+  streamURL: STREAM_URL,
+  maxBufferLen: 100,
+});
+s.subsribe();
 ```
