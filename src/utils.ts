@@ -18,7 +18,7 @@ const MAX_PAYLOAD_SIZE = 100 * 1000; // 100 kB
  * Query the transactions in the specified L2 block.
  * @field {number} block_number specifies the block number to query.
  *                 If not specified, transactions from latest block
-                   are returned.
+ *                 are returned.
  */
 export interface BlockQuery {
   block_number?: number;
@@ -35,9 +35,29 @@ export interface BlockQueryResponse {
 }
 
 /**
+ * Query the action for the specified action id.
+ * @field {number} action_id specifies the action to query.
+ */
+export interface ActionQuery {
+  action_id: number;
+}
+
+/**
+ * Response for ActionQuery.
+ * @field {number} block_number the block the action is part of.
+ *                 If the action is not yet included in any block,
+ *                 null is returned.
+ * @field {Action} action in protobuf format.
+ */
+export interface ActionQueryResponse {
+  block_number?: number;
+  action: proto.nord.Action;
+}
+
+/**
  * Info about the block transaction.
  * @field {number} action_id is the action identifier.
- * @field {Action} action is the action.
+ * @field {Action} action in protobuf format.
  */
 export interface ActionInfo {
   action_id: number;
@@ -64,6 +84,11 @@ export interface AggregateMetrics {
 interface RollmanBlockQueryResponse {
   block_number: number;
   actions: RollmanActionInfo[];
+}
+
+interface RollmanActionQueryResponse {
+  block_number?: number;
+  action_pb: Uint8Array;
 }
 
 interface RollmanActionInfo {
@@ -145,11 +170,19 @@ export function encodeDelimited(a: proto.nord.Action): Uint8Array {
  * @returns Decoded Action as Uint8Array.
  */
 function decodeActionDelimited(u: Uint8Array): proto.nord.Action {
+  // Find the varint length of the protobuf.
   let index = 0;
+  let protoLen = 0;
   while (u[index] >> 7 > 0) {
+    protoLen |= (u[index] & 0b1111111) << (index * 7);
     index++;
   }
-  return proto.nord.Action.deserialize(u.slice(index + 1));
+  protoLen |= (u[index] & 0b1111111) << (index * 7);
+
+  // Decode only the part specified by the varint length.
+  const remainingLen = u.length - index - 1;
+  const len = Math.min(remainingLen, protoLen);
+  return proto.nord.Action.deserialize(u.slice(index + 1, index + 1 + len));
 }
 
 /**
@@ -265,14 +298,14 @@ export class NordMetrics {
     rollmanUrl,
     prometheusUrl,
   }: Readonly<{ rollmanUrl: string; prometheusUrl: string }>) {
-    this.rollmanUrl = rollmanUrl + "/block_query";
+    this.rollmanUrl = rollmanUrl;
     this.prometheusUrl = prometheusUrl + "/api/v1/query";
   }
 
-  // Query the block metrics from rollman.
+  // Query the block info from rollman.
   async queryBlock(query: BlockQuery): Promise<BlockQueryResponse> {
     const rollmanResponse: RollmanBlockQueryResponse =
-      await this.queryRollman(query);
+      await this.blockQueryRollman(query);
     const queryResponse: BlockQueryResponse = {
       block_number: rollmanResponse.block_number,
       actions: [],
@@ -288,12 +321,23 @@ export class NordMetrics {
     return queryResponse;
   }
 
+  // Query the action info from rollman.
+  async queryAction(query: ActionQuery): Promise<ActionQueryResponse> {
+    const rollmanResponse: RollmanActionQueryResponse =
+      await this.actionQueryRollman(query);
+    const queryResponse: ActionQueryResponse = {
+      block_number: rollmanResponse.block_number,
+      action: decodeActionDelimited(rollmanResponse.action_pb),
+    };
+    return queryResponse;
+  }
+
   // Query the aggregate metrics across nord and rollman.
   async aggregateMetrics(): Promise<AggregateMetrics> {
     // Get the latest block number for L2 blocks.
     const blockQuery: BlockQuery = {};
     const rollmanResponse: RollmanBlockQueryResponse =
-      await this.queryRollman(blockQuery);
+      await this.blockQueryRollman(blockQuery);
 
     const metrics: AggregateMetrics = {
       blocks_total: rollmanResponse.block_number,
@@ -307,9 +351,11 @@ export class NordMetrics {
     return metrics;
   }
 
-  // Helper to query rollman.
-  async queryRollman(query: BlockQuery): Promise<RollmanBlockQueryResponse> {
-    let url = this.rollmanUrl;
+  // Helper to query rollman for block info.
+  async blockQueryRollman(
+    query: BlockQuery,
+  ): Promise<RollmanBlockQueryResponse> {
+    let url = this.rollmanUrl + "/block";
     if (query.block_number != null) {
       url = url + "?block_number=" + query.block_number;
     }
@@ -318,6 +364,19 @@ export class NordMetrics {
       throw new Error("Rollman query failed " + url);
     }
     const rollmanResponse: RollmanBlockQueryResponse = await response.json();
+    return rollmanResponse;
+  }
+
+  // Helper to query rollman for action info.
+  async actionQueryRollman(
+    query: ActionQuery,
+  ): Promise<RollmanActionQueryResponse> {
+    const url = this.rollmanUrl + "/action?action_id=" + query.action_id;
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error("Rollman query failed " + url);
+    }
+    const rollmanResponse: RollmanActionQueryResponse = await response.json();
     return rollmanResponse;
   }
 
