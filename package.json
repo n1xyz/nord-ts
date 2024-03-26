@@ -9,7 +9,7 @@
     "dist"
   ],
   "scripts": {
-    "build:proto": "scripts/protoc-generate.sh && rm -f ./src/gen/action_pb.js",
+    "build:proto": "./protoc-generate.sh && rm -f ./src/gen/action_pb.js",
     "test": "mocha -r ts-node/register test/*.ts",
     "docs": "npx typedoc --out ./docs ./src",
     "build": "npm run build:proto && tsc && npm run docs",
