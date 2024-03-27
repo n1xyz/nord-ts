@@ -65,6 +65,17 @@ export interface ActionInfo {
 }
 
 /**
+ * The peak TPS rate is queried over the specified period.
+ * The period is specified in units of: {hour, day, week, month, year}.
+ * Example inputs:
+ *  1. AggregateMetrics.txPeakTpsPeriod = 3,
+ *     AggregateMetrics.txPeakTpsPeriodUnit = "d" => Peak TPS over last 3 days.
+ *  1. AggregateMetrics.txPeakTpsPeriod = 1,
+ *     AggregateMetrics.txPeakTpsPeriodUnit = "w" => Peak TPS over last week.
+ */
+export type PeakTpsPeriodUnit = "h" | "d" | "w" | "m" | "y";
+
+/**
  * Aggregate metrics
  * @field {number} blocks_total: Total number of L2 blocks.
  * @field {number} tx_total: Total number of transactions.
@@ -333,17 +344,22 @@ export class NordMetrics {
   }
 
   // Query the aggregate metrics across nord and rollman.
-  async aggregateMetrics(): Promise<AggregateMetrics> {
+  async aggregateMetrics(
+    txPeakTpsPeriod: number,
+    txPeakTpsPeriodUnit: PeakTpsPeriodUnit,
+  ): Promise<AggregateMetrics> {
     // Get the latest block number for L2 blocks.
     const blockQuery: BlockQuery = {};
     const rollmanResponse: RollmanBlockQueryResponse =
       await this.blockQueryRollman(blockQuery);
+    const period = txPeakTpsPeriod.toString() + txPeakTpsPeriodUnit;
+    const query = `max_over_time(rate(nord_requests_count[1m])[${period}:1m])`;
 
     const metrics: AggregateMetrics = {
       blocks_total: rollmanResponse.block_number,
       tx_total: await this.queryPrometheus("nord_requests_count"),
       tx_tps: await this.queryPrometheus("rate(nord_requests_count[1m])"),
-      tx_tps_peak: 99, // TODO
+      tx_tps_peak: await this.queryPrometheus(query),
       request_latency_average: await this.queryPrometheus(
         'nord_requests_latency{quantile="0.5"}',
       ),
