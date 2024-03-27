@@ -1,0 +1,270 @@
+// Only the `Action` and `Receipt` messages are length-delimited,
+// i.e. prefixed with a varint encoding the length of the protobuf message.
+// All other message types are encoded normally, i.e. with no prefix.
+
+syntax = "proto3";
+
+package nord;
+
+enum Side {
+  ASK = 0;
+  BID = 1;
+}
+
+enum FillMode {
+  LIMIT = 0;
+  POST_ONLY = 1;
+  IMMEDIATE_OR_CANCEL = 2;
+  FILL_OR_KILL = 3;
+}
+
+enum MarketType {
+  SPOT = 0;
+  PERPETUALS = 1;
+}
+
+message Market {
+  uint32 market_id = 1;
+  uint32 price_decimals = 2;
+  uint32 size_decimals = 3;
+  uint32 base_token_id = 4;
+  MarketType market_type = 5;
+  uint32 imf_bps = 6;
+  uint32 cmf_bps = 7;
+  uint32 mmf_bps = 8;
+  string symbol = 10;
+}
+
+message Token {
+  uint32 token_id = 1;
+  uint32 decimals = 2;
+  uint32 weight_bps = 3;
+  string symbol = 4;
+}
+
+enum Error {
+  DUPLICATE = 0;
+  TIMESTAMP_STALE = 1;
+  DECODE_FAILURE = 2;
+  INVALID_SIGNATURE = 3;
+  MARKET_NOT_FOUND = 4;
+  TOKEN_NOT_FOUND = 5;
+  USER_NOT_FOUND = 6;
+  SESSION_NOT_FOUND = 7;
+  ORDER_NOT_FOUND = 8;
+  ORDER_SIZE_ZERO = 9;
+  INSUFFICIENT_BALANCE = 10;
+  ARITHMETIC_OVERFLOW = 11;
+  RISK_TOO_HIGH = 12;
+  ORDER_EXECUTION = 13;
+  INVALID_ORDER_OWNER = 14;
+  KEY_ALREADY_REGISTERED = 15;
+  EXPIRY_TIMESTAMP_IN_PAST = 16;
+  UPDATE_TIMESTAMP_IN_PAST = 17;
+  TOO_MANY_OPEN_ORDERS = 18;
+  TOO_MANY_OPEN_SESSIONS = 19;
+  INVALID_ACTION_NONCE = 20;
+  WITHDRAW_AMOUNT_TOO_SMALL = 21;
+  PYTH_FEED_NOT_ADDED = 93;
+  PYTH_FEED_MISSING = 94;
+  PYTH_FEED_ALREADY_ADDED = 95;
+  PYTH_GUARDIAN_SET_UNINITIALIZED = 96;
+  PYTH_GUARDIAN_SET_INVALID = 97;
+  UNINITIALIZED_PRICES = 98; // TODO(deprecate)
+  PYTH_FEED_PRICE_OUT_OF_RANGE = 99;
+  INVALID_PARAMETERS = 100;
+  Dropped = 999;
+}
+
+message Action {
+  message CreateSession {
+    uint32 user_id = 1;
+    // MUST be 96 bytes.
+    bytes blst_pubkey = 2;
+    int64 expiry_timestamp = 3;
+  }
+
+  message CreateToken {
+    uint32 decimals = 1;
+    uint32 weight_bps = 3;
+    string symbol = 4;
+    string oracle_symbol = 5;
+    // On chain id for the wrapped asset on the rollup
+    bytes eth_addr = 6;
+    // Minimum amount to withdraw per action to disincentivize spam.
+    uint64 min_withdraw_amount = 7;
+  }
+
+  message CreateMarket {
+    uint32 decimals = 1;
+    uint32 tick_size = 2;
+    uint32 imf_bps = 3;
+    uint32 cmf_bps = 4;
+    uint32 mmf_bps = 5;
+    MarketType market_type = 6;
+    // Arbitrary human-readable market symbol, not to be confused with token's symbol
+    string symbol = 7;
+    // Oracle symbol which references specific price feed. Must be `oracle_symbol` of registered price feed
+    string oracle_symbol = 8;
+    // 0 for `MarketType::Perpetual`, one of registered `token_id`'s for `MarketType::Spot`
+    uint32 base_token_id = 9;
+  }
+
+  message PlaceOrder {
+    uint64 session_id = 1;
+    uint32 market_id = 2;
+    Side side = 3;
+    FillMode fill_mode = 4;
+    bool is_reduce_only = 5;
+    // Shifted by the market's tick_decimals. If 0, is
+    // interpreted as `null`, i.e. a market order.
+    uint64 price = 6;
+    // Shifted by the market's decimals. Must be non-zero.
+    uint64 size = 7;
+  }
+
+  message CancelOrderById {
+    uint64 session_id = 1;
+    uint64 order_id = 2;
+  }
+
+  message Deposit {
+    uint64 action_nonce = 1;
+    uint32 token_id = 2;
+    // Shifted by the token's decimals.
+    uint64 amount = 3;
+    bytes user_secp256k1_pubkey = 4;
+  }
+
+  message Withdraw {
+    uint32 token_id = 1;
+    uint32 user_id = 2;
+    // Shifted by the token's decimals.
+    uint64 amount = 3;
+  }
+
+  message PythSetWormholeGuardians {
+    uint32 guardian_set_index = 1;
+    // Each address is 20 bytes, consisting of the last 20 bytes
+    // of the keccak256 hash of the public key of the guardian.
+    repeated bytes addresses = 2;
+  }
+
+  // Associate a oracle symbol to a Pyth Feed ID.
+  message PythSetSymbolFeed {
+    string oracle_symbol = 1;
+    // MUST be 32 bytes.
+    bytes price_feed_id = 2;
+  }
+
+  message PythPriceFeedUpdate {
+    bytes raw_pythnet_data = 1;
+  }
+
+  // Must be within 60s of the engine's current logical time, which
+  // should be within a few seconds of real time.
+  //
+  // Ignored for the `PythPriceFeedUpdate` action as that action updates
+  // the timestamp. Should be set to 0 in that case to omit it.
+  int64 current_timestamp = 1;
+
+  // Optional nonce to handle the case where multiple transactions
+  // have the same `current_timestamp` so they have different signatures.
+  uint32 nonce = 2;
+
+  oneof kind {
+    CreateSession create_session = 4;
+    CreateToken create_token = 5;
+    CreateMarket create_market = 6;
+    PlaceOrder place_order = 7;
+    CancelOrderById cancel_order_by_id = 8;
+    Deposit deposit = 9;
+    Withdraw withdraw = 10;
+    PythSetWormholeGuardians pyth_set_wormhole_guardians = 11;
+    PythSetSymbolFeed pyth_set_symbol_feed = 12;
+    PythPriceFeedUpdate pyth_price_feed_update = 13;
+  }
+}
+
+message Receipt {
+  message Posted {
+    Side side = 1;
+    uint32 market_id = 2;
+    uint64 price = 3;
+    uint64 size = 4;
+    uint64 order_id = 5;
+  }
+
+  message Trade {
+    uint64 order_id = 2;
+    uint64 price = 4;
+    uint64 size = 5;
+  }
+
+  message CreateSessionResult {
+    uint64 session_id = 1;
+  }
+
+  message PlaceOrderResult {
+    optional Posted posted = 1;
+    repeated Trade fills = 2;
+  }
+
+  message CancelOrderResult {
+    uint64 order_id = 1;
+  }
+
+  message DepositResult {
+    uint32 token_id = 1;
+    uint64 new_amount = 2;
+    uint32 user_id = 3;
+    bool user_created = 4;
+  }
+
+  message InsertTokenResult {
+    bytes chain_addr = 1;
+    Token token = 2;
+  }
+
+  message InsertMarketResult {
+    Market market = 1;
+  }
+
+  message WithdrawResult {
+    uint32 token_id = 1;
+    uint64 amount = 2;
+    uint64 balance = 3;
+    uint32 user_id = 4;
+    bytes user_pubkey = 5;
+  }
+
+  // pyth receipts are not user facing, so they can be terse and optional
+  message OracleSymbolFeedResult {
+    string oracle_symbol = 1;
+    bytes feed_id = 2;
+  }
+
+
+  message OracleUpdateResult {
+    int64 timestamp = 1;
+  }
+
+  message UpdateGuardianSetResult {
+    uint32 guardian_set_index = 1;
+    repeated bytes addresses = 2;
+  }
+
+  oneof kind {
+    Error err = 1;
+    CreateSessionResult create_session_result = 2;
+    PlaceOrderResult place_order_result = 3;
+    CancelOrderResult cancel_order_result = 4;
+    DepositResult deposit_result = 5;
+    InsertTokenResult insert_token_result = 6;
+    InsertMarketResult insert_market_result = 7;
+    WithdrawResult withdraw_result = 8;
+    OracleSymbolFeedResult oracle_symbol_feed_result = 9;
+    OracleUpdateResult oracle_update_result = 10;
+    UpdateGuardianSetResult update_guardian_set_result = 11;
+  }
+}

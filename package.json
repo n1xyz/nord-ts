@@ -6,14 +6,13 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "dev": "nodemon --exec npx tsc",
-    "build:proto": "scripts/protoc-generate.sh && rm -f ./src/gen/action_pb.js",
+    "build:proto": "./protoc-generate.sh && rm -f ./src/gen/action_pb.js",
     "test": "mocha -r ts-node/register test/*.ts",
     "docs": "npx typedoc --out ./docs ./src",
-    "build": "npm run build:proto && npm run docs",
+    "build": "npm run build:proto && tsc && npm run docs",
     "clean": "rm -rf ./src/gen && rm -rf docs",
     "lint": "yarn eslint --fix --ext .ts --ext .js src",
-    "fmt": "yarn prettier --write src",
-    "tsc-build": "tsc"
+    "fmt": "yarn prettier --write src"
   },
   "repository": {
     "type": "git",
