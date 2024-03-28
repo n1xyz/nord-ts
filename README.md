@@ -1,6 +1,6 @@
 # nord-ts
 
-This package provides an interface to interact with the Nord exchange. Functionality includes generating Action messages, signing with `Secp256k1` and sending payloads. There are also various util functions and interfaces provided.
+This package provides an interface to interact with the Nord exchange. Functionality includes generating Action messages, signing with `Ed25119` and sending payloads. There are also various util functions and interfaces provided.
 
 ## Installation
 
@@ -20,7 +20,7 @@ yarn add nord-ts
 
 - create a new client with a new user and a new session ( `createClient` )
 - generate Action messages ( `deposit` | `withdraw` | `placeOrder` | `cancelOrderById` )
-- Cryptographic support for `Secp256k1` key types.
+- Cryptographic support for `Ed25119` key types.
 - Message signing and transmission capabilities.
 - Data serialization and deserialization for protobuf.
 
