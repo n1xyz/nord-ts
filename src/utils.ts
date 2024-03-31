@@ -117,6 +117,12 @@ export async function sendMessage(payload: Uint8Array): Promise<Uint8Array> {
   }
 }
 
+export const assert = (pred: boolean): void => {
+  if (!pred) {
+    throw new Error("assertion violation");
+  }
+};
+
 /**
  * Signs an action using the specified secret key and key type.
  * @param action - The action data to be signed.

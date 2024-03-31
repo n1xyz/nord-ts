@@ -29,13 +29,13 @@
     "@typescript-eslint/eslint-plugin": "^6.4.0",
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.1.0",
-    "eslint-config-standard-with-typescript": "^42.0.0",
     "eslint-plugin-import": "^2.25.2",
     "eslint-plugin-n": "^15.0.0 || ^16.0.0 ",
     "eslint-plugin-promise": "^6.0.0",
     "prettier": "^3.1.1",
     "protoc-gen-js": "^3.21.2",
     "protoc-gen-ts": "^0.8.7",
+    "@vercel/style-guide": "^6.0.0",
     "ts-node": "^10.9.1",
     "ts-proto": "^1.156.7",
     "typedoc": "^0.25.0",
@@ -48,6 +48,7 @@
     "ethers": "^6.11.1",
     "google-protobuf": "^3.21.2",
     "node-fetch": "2.6.13",
+    "secp256k1": "^5.0.0",
     "ws": "^8.16.0"
   }
 }
