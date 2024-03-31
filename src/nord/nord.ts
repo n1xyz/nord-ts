@@ -5,7 +5,8 @@ import {BrowserProvider, ethers, SigningKey} from "ethers";
 //@ts-ignore
 import {secp256k1} from "secp256k1";
 import {
-    type DeltaEvent, ERC20TokenInfo,
+    type DeltaEvent,
+    ERC20TokenInfo,
     type FillMode,
     type Info,
     type Market,
@@ -68,14 +69,15 @@ export class NordUser {
     async fundWallet() {
         const provider = new ethers.JsonRpcProvider(this.nord.evmUrl);
         const wallet = new ethers.Wallet(FAUCET_PRIVATE_ADDRESS, provider);
+        assert(DEFAULT_FUNDING_AMOUNTS['ETH'] != null);
         const ethTx = await wallet.sendTransaction({
             to: this.address,
-            value: ethers.parseEther(DEFAULT_FUNDING_AMOUNTS['ETH'][0]!)
+            value: ethers.parseEther(DEFAULT_FUNDING_AMOUNTS['ETH'][0])
         });
         await ethTx.wait();
         for (const tokenInfo of this.nord.tokenInfos) {
             const erc20Contract = new ethers.Contract(tokenInfo.address, ERC20_ABI, wallet);
-            const defaultFundingAmount = DEFAULT_FUNDING_AMOUNTS[tokenInfo.address]!;
+            const defaultFundingAmount = DEFAULT_FUNDING_AMOUNTS[tokenInfo.address];
             const tokenTx = await erc20Contract.transfer(this.address, ethers.parseUnits(defaultFundingAmount[0], defaultFundingAmount[1]), {gasLimit: 1000000});
             tokenTx.wait();
         }
@@ -218,7 +220,7 @@ export class Subscriber {
         this.maxBufferLen = config.maxBufferLen ?? MAX_BUFFER_LEN;
     }
 
-    subsribe(): void {
+    subscribe(): void {
         const ws = new WebSocket(this.streamURL);
 
         ws.on("open", () => {

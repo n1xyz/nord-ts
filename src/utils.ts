@@ -1,10 +1,10 @@
-import { Decimal } from "decimal.js";
-import { ed25519 } from "@noble/curves/ed25519";
-import { bls12_381 as bls } from "@noble/curves/bls12-381";
-import { secp256k1 as secp } from "@noble/curves/secp256k1";
-import { sha256 } from "@noble/hashes/sha256";
+import {Decimal} from "decimal.js";
+import {ed25519} from "@noble/curves/ed25519";
+import {bls12_381 as bls} from "@noble/curves/bls12-381";
+import {secp256k1 as secp} from "@noble/curves/secp256k1";
+import {sha256} from "@noble/hashes/sha256";
 import fetch from "node-fetch";
-import { KeyType, type Market, type Token } from "./types";
+import {KeyType, type Market, type Token} from "./types";
 import * as proto from "./gen/nord";
 
 export const SESSION_TTL = 10 * 60;
@@ -13,6 +13,9 @@ export const MAX_BUFFER_LEN = 10_000;
 
 const NORD_URL = "http://localhost:3000/action";
 const MAX_PAYLOAD_SIZE = 100 * 1000; // 100 kB
+
+const ROLLMAN_URL = "http://localhost:9248/block_query";
+const PROMETHEUS_URL = "http://localhost:9090/api/v1/query";
 
 /**
  * Query the transactions in the specified L2 block.
@@ -296,6 +299,79 @@ export function findToken(tokens: Token[], tokenId: number): Token {
   return tokens[tokenId];
 }
 
+/**
+ * Performs the block query.
+ * @param query -Query params.
+ * @returns the block transactions.
+ */
+export async function queryBlock(
+  query: BlockQuery,
+): Promise<BlockQueryResponse> {
+  const rollman_response: RollmanBlockQueryResponse = await queryRollman(query);
+  const query_response: BlockQueryResponse = {
+    block_number: rollman_response.block_number,
+    actions: [],
+  };
+
+  for (const rollman_action of rollman_response.actions) {
+    const block_action: ActionInfo = {
+      action_id: rollman_action.action_id,
+      action: decodeActionDelimited(rollman_action.action_pb),
+    };
+    query_response.actions.push(block_action);
+  }
+  return query_response;
+}
+
+/**
+ * Gets the aggregate metrics.
+ * @returns the aggregate metrics.
+ */
+export async function aggregateMetrics(): Promise<AggregateMetrics> {
+  // Get the latest block number for L2 blocks.
+  const block_query: BlockQuery = {};
+  const rollman_response: RollmanBlockQueryResponse =
+    await queryRollman(block_query);
+  // const blocks_total = rollman_response.block_number;
+
+  return {
+    blocks_total: rollman_response.block_number,
+    tx_total: await queryPrometheus("nord_requests_count"),
+    tx_tps: await queryPrometheus("rate(nord_requests_count[1m])"),
+    tx_tps_peak: 99, // TODO
+    request_latency_average: await queryPrometheus(
+        'nord_requests_latency{quantile="0.5"}',
+    ),
+  };
+}
+
+// Helper to query rollman.
+async function queryRollman(
+  query: BlockQuery,
+): Promise<RollmanBlockQueryResponse> {
+  let url = ROLLMAN_URL;
+  if (query.block_number != null) {
+    url = url + "?block_number=" + query.block_number;
+  }
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error("Rollman query failed " + url);
+  }
+  return await response.json();
+}
+
+// Helper to query prometheus.
+async function queryPrometheus(params: string): Promise<number> {
+  const url = PROMETHEUS_URL + "?query=" + params;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error("Prometheus query failed " + url);
+  }
+  const json = await response.json();
+  // Prometheus HTTP API: https://prometheus.io/docs/prometheus/latest/querying/api/
+  return Number(json.data.result[0].value[1]);
+}
+
 export class NordMetrics {
   private readonly rollmanUrl: string;
   private readonly prometheusUrl: string;
@@ -345,16 +421,15 @@ export class NordMetrics {
     const rollmanResponse: RollmanBlockQueryResponse =
       await this.blockQueryRollman(blockQuery);
 
-    const metrics: AggregateMetrics = {
+    return {
       blocks_total: rollmanResponse.block_number,
       tx_total: await this.queryPrometheus("nord_requests_count"),
       tx_tps: await this.queryPrometheus("rate(nord_requests_count[1m])"),
       tx_tps_peak: 99, // TODO
       request_latency_average: await this.queryPrometheus(
-        'nord_requests_latency{quantile="0.5"}',
+          'nord_requests_latency{quantile="0.5"}',
       ),
     };
-    return metrics;
   }
 
   // Helper to query rollman for block info.
@@ -369,8 +444,7 @@ export class NordMetrics {
     if (!response.ok) {
       throw new Error(`Rollman query failed ${  url}`);
     }
-    const rollmanResponse: RollmanBlockQueryResponse = await response.json();
-    return rollmanResponse;
+    return await response.json();
   }
 
   // Helper to query rollman for action info.
@@ -382,8 +456,7 @@ export class NordMetrics {
     if (!response.ok) {
       throw new Error(`Rollman query failed ${  url}`);
     }
-    const rollmanResponse: RollmanActionQueryResponse = await response.json();
-    return rollmanResponse;
+    return await response.json();
   }
 
   // Helper to query prometheus.
