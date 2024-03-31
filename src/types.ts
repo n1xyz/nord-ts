@@ -7,16 +7,16 @@ export type Actions =
   | proto.nord.Action.CancelOrderById
   | proto.nord.Action.PlaceOrder;
 
-export interface DepositParams {
+export interface WithdrawParams {
   tokenId: number;
   userId: number;
   amount: number;
 }
 
-export interface WithdrawParams {
+export interface ERC20TokenInfo{
+  address: string;
+  precision: number;
   tokenId: number;
-  userId: number;
-  amount: number;
 }
 
 export interface CreateSessionParams {
@@ -60,11 +60,6 @@ export enum FillMode {
   PostOnly,
   ImmediateOrCancel,
   FillOrKill,
-}
-
-export interface ClientConfig {
-  url: string;
-  privateKey: Uint8Array;
 }
 
 export interface SubsriberConfig {

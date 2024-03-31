@@ -1,7 +1,9 @@
+import {sha256} from "@noble/hashes/sha256";
+import {Hex} from "@noble/curves/src/abstract/utils";
+import {ethers} from "ethers";
 import {
     CancelOrderParams,
     CreateSessionParams,
-    DepositParams,
     FillMode,
     fillModeToProtoFillMode,
     KeyType,
@@ -20,10 +22,7 @@ import {
     SESSION_TTL,
     toShiftedNumber
 } from "../utils";
-import {sha256} from "@noble/hashes/sha256";
 import * as proto from "../gen/nord";
-import {Hex} from "@noble/curves/src/abstract/utils";
-import {ethers} from "ethers";
 
 export class CreateSessionAction {
     url: string;
@@ -89,69 +88,6 @@ export class CreateSessionAction {
         });
 
         return encodeDelimited(pbCreateSession);
-    }
-}
-
-export class DepositAction {
-    url: string;
-    message: Uint8Array;
-    signFn: (message: Hex) => Promise<Uint8Array>;
-
-    constructor(
-        url: string,
-        signFn: (message: Hex) => Promise<Uint8Array>,
-        sizeDecimals: number,
-        tokenId: number,
-        userId: number,
-        amount: number,
-    ) {
-        this.url = url;
-        this.signFn = signFn;
-
-        this.message = DepositAction.getPayload({
-            tokenId,
-            userId,
-            amount: toShiftedNumber(amount, sizeDecimals),
-        });
-    }
-
-    async send(): Promise<void> {
-        const signature = await this.signFn(this.message);
-        const body = new Uint8Array([...this.message, ...signature]);
-        const resp = decodeDelimited(await sendMessage(body));
-        if (resp.has_err) {
-            throw new Error(`Could not deposit, reason: ${resp.err}`);
-        }
-        // Receipt for Deposit does not implemented
-    }
-
-
-    /**
-     * Generates a deposit action payload.
-     *
-     * @param params - Parameters for deposit.
-     * @param params.tokenId - ID of the token.
-     * @param params.userId - ID of the user.
-     * @param params.amount - Amount to deposit.
-     * @returns Encoded message as Uint8Array.
-     * @throws Will throw an error if deposit amount is 0 or less.
-     */
-    static getPayload(params: DepositParams): Uint8Array {
-        // if (params.amount.lessThan(ZERO_DECIMAL)) {
-        if (params.amount < 0) {
-            throw new Error("Cannot deposit 0 or less.");
-        }
-
-        const pbDeposit = proto.nord.Action.fromObject({
-            current_timestamp: getCurrentTimestamp(),
-            nonce: getNonce(),
-            deposit: new proto.nord.Action.Deposit({
-                token_id: params.tokenId,
-                amount: params.amount,
-            }),
-        });
-
-        return encodeDelimited(pbDeposit);
     }
 }
 

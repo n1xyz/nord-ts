@@ -1,7 +1,11 @@
-import {assert, findMarket, findToken, MAX_BUFFER_LEN,} from "../utils";
+import fetch from "node-fetch";
+import WebSocket from "ws";
+import {Hex} from "@noble/curves/src/abstract/utils";
+import {BrowserProvider, ethers, SigningKey} from "ethers";
+//@ts-ignore
+import {secp256k1} from "secp256k1";
 import {
-    type ClientConfig,
-    type DeltaEvent,
+    type DeltaEvent, ERC20TokenInfo,
     type FillMode,
     type Info,
     type Market,
@@ -9,23 +13,27 @@ import {
     type SubsriberConfig,
     type Token,
 } from "../types";
-import fetch from "node-fetch";
-import WebSocket from "ws";
-import {CancelOrderAction, CreateSessionAction, DepositAction, PlaceOrderAction, WithdrawAction} from "./actions";
-import {Hex} from "@noble/curves/src/abstract/utils";
-import {ethers, SigningKey} from "ethers";
-import {secp256k1} from "secp256k1";
-import {DEFAULT_FUNDING_AMOUNTS, FAUCET_PRIVATE_ADDRESS} from "../const";
+import {assert, findMarket, findToken, MAX_BUFFER_LEN,} from "../utils";
+import {
+    DEFAULT_FUNDING_AMOUNTS,
+    DEV_CONTRACT_ADDRESS,
+    DEV_TOKEN_INFOS,
+    EVM_DEV_URL,
+    FAUCET_PRIVATE_ADDRESS,
+    NORD_DEV_URL
+} from "../const";
 import {ERC20_ABI} from "../scs/abis/ERC20_ABI";
+import {CancelOrderAction, CreateSessionAction, PlaceOrderAction, WithdrawAction} from "./actions";
+import {NORD_RAMP_FACET_ABI} from "../scs/abis/NORD_RAMP_FACET_ABI";
 
 export class NordUser {
     nord: Nord;
     address: string;
     walletSignFn: (message: Hex) => Promise<string>;
     sessionSignFn: (message: Hex) => Promise<Uint8Array>;
-    publicKey: string = "";
-    userId: number = -1;
-    sessionId: number = -1;
+    publicKey = "";
+    userId = -1;
+    sessionId = -1;
 
     get publicKeyPresent() {
         return this.publicKey != ""
@@ -36,8 +44,8 @@ export class NordUser {
         address: string,
         walletSignFn: (message: Hex) => Promise<string>,
         sessionSignFn: (message: Hex) => Promise<Uint8Array>,
-        userId: number = -1,
-        sessionId: number = -1
+        userId = -1,
+        sessionId = -1
     ) {
         this.nord = nord;
         this.address = address;
@@ -65,9 +73,9 @@ export class NordUser {
             value: ethers.parseEther(DEFAULT_FUNDING_AMOUNTS['ETH'][0]!)
         });
         await ethTx.wait();
-        for (const tokenAddress of this.nord.tokenAddresses) {
-            const erc20Contract = new ethers.Contract(tokenAddress, ERC20_ABI, wallet);
-            const defaultFundingAmount = DEFAULT_FUNDING_AMOUNTS[tokenAddress]!;
+        for (const tokenInfo of this.nord.tokenInfos) {
+            const erc20Contract = new ethers.Contract(tokenInfo.address, ERC20_ABI, wallet);
+            const defaultFundingAmount = DEFAULT_FUNDING_AMOUNTS[tokenInfo.address]!;
             const tokenTx = await erc20Contract.transfer(this.address, ethers.parseUnits(defaultFundingAmount[0], defaultFundingAmount[1]), {gasLimit: 1000000});
             tokenTx.wait();
         }
@@ -89,19 +97,20 @@ export class NordUser {
     }
 
     async deposit(
-        tokenId: number,
-        amount: number
+        provider: BrowserProvider,
+        amount: number,
+        tokenId: number
     ): Promise<void> {
-        const message = new DepositAction(
-            `${this.nord.nordUrl}/action`,
-            this.sessionSignFn,
-            findToken(this.nord.tokens, tokenId).decimals,
-            tokenId,
-            this.userId,
-            amount,
-        );
-
-        await message.send();
+        if (tokenId || tokenId == 0) {
+            const erc20 = this.nord.tokenInfos[tokenId];
+            const erc20Contract = new ethers.Contract(erc20.address, ERC20_ABI, await provider.getSigner());
+            const approveTx = await erc20Contract.approve(DEV_CONTRACT_ADDRESS, ethers.parseUnits(amount.toString(), erc20.precision), {gasLimit: 1000000});
+            await approveTx.wait();
+        } else {
+            const nordContract = new ethers.Contract(DEV_CONTRACT_ADDRESS, NORD_RAMP_FACET_ABI, await provider.getSigner());
+            const depositTx = await nordContract.depositUnchecked(this.publicKey, BigInt(0), ethers.parseUnits(amount.toString(), 6), {gasLimit: 1000000});
+            await depositTx.wait();
+        }
     }
 
     async withdraw(
@@ -166,35 +175,34 @@ export class NordUser {
 export class Nord {
     nordUrl: string;
     evmUrl: string;
-    tokenAddresses: string[];
+    tokenInfos: ERC20TokenInfo[];
     markets: Market[];
     tokens: Token[];
 
-    constructor(nordUrl: string, evmUrl: string, tokenAddresses: []) {
+    constructor(nordUrl: string, evmUrl: string, tokenInfos: ERC20TokenInfo[]) {
         this.nordUrl = nordUrl;
         this.evmUrl = evmUrl;
-        this.tokenAddresses = [];
+        this.tokenInfos = tokenInfos;
         this.markets = [];
         this.tokens = [];
     }
 
-    public static async createClient({
-                                         url,
-                                         privateKey,
-                                     }: ClientConfig): Promise<Nord> {
-        const nord = new Nord(privateKey);
-        nord.nordUrl = url;
-        const pubkeyHex = Buffer.from(nord.publicKey).toString("hex");
-        const response = await fetch(`${url}/info`, {method: "GET"});
+    async fetchNordInfo() {
+        const response = await fetch(`${this.nordUrl}/info`, {method: "GET"});
         const info: Info = await response.json();
-        const userId = await fetch(`${url}/user_id?pubkey=${pubkeyHex}`)
-            .then(async (r) => await r.json())
-            .then((u) => Number(u));
-        nord.markets = info.markets;
-        nord.tokens = info.tokens;
-        nord.userId = userId;
+        this.markets = info.markets;
+        this.tokens = info.tokens;
+    }
 
-        await nord.refreshSession(nord.userId);
+    public static async initNord(nordUrl: string, evmUrl: string, tokenInfos: ERC20TokenInfo[]): Promise<Nord> {
+        const nord = new Nord(nordUrl, evmUrl, tokenInfos);
+        await nord.fetchNordInfo();
+        return nord;
+    }
+
+    public static async initDevNord(): Promise<Nord> {
+        const nord = new Nord(NORD_DEV_URL, EVM_DEV_URL, DEV_TOKEN_INFOS);
+        await nord.fetchNordInfo();
         return nord;
     }
 }
@@ -234,7 +242,7 @@ export class Subscriber {
         });
     }
 
-    checkEvent(event: DeltaEvent): boolean {
+    checkEvent(_event: DeltaEvent): boolean {
         return true;
     }
 }

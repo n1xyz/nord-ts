@@ -1,11 +1,11 @@
 import { Decimal } from "decimal.js";
-import * as proto from "./gen/nord";
 import { ed25519 } from "@noble/curves/ed25519";
 import { bls12_381 as bls } from "@noble/curves/bls12-381";
 import { secp256k1 as secp } from "@noble/curves/secp256k1";
 import { sha256 } from "@noble/hashes/sha256";
-import { KeyType, type Market, type Token } from "./types";
 import fetch from "node-fetch";
+import { KeyType, type Market, type Token } from "./types";
+import * as proto from "./gen/nord";
 
 export const SESSION_TTL = 10 * 60;
 export const ZERO_DECIMAL = new Decimal(0);
@@ -305,7 +305,7 @@ export class NordMetrics {
     prometheusUrl,
   }: Readonly<{ rollmanUrl: string; prometheusUrl: string }>) {
     this.rollmanUrl = rollmanUrl;
-    this.prometheusUrl = prometheusUrl + "/api/v1/query";
+    this.prometheusUrl = `${prometheusUrl  }/api/v1/query`;
   }
 
   // Query the block info from rollman.
@@ -361,13 +361,13 @@ export class NordMetrics {
   async blockQueryRollman(
     query: BlockQuery,
   ): Promise<RollmanBlockQueryResponse> {
-    let url = this.rollmanUrl + "/block";
+    let url = `${this.rollmanUrl  }/block`;
     if (query.block_number != null) {
-      url = url + "?block_number=" + query.block_number;
+      url = `${url  }?block_number=${  query.block_number}`;
     }
     const response = await fetch(url);
     if (!response.ok) {
-      throw new Error("Rollman query failed " + url);
+      throw new Error(`Rollman query failed ${  url}`);
     }
     const rollmanResponse: RollmanBlockQueryResponse = await response.json();
     return rollmanResponse;
@@ -377,10 +377,10 @@ export class NordMetrics {
   async actionQueryRollman(
     query: ActionQuery,
   ): Promise<RollmanActionQueryResponse> {
-    const url = this.rollmanUrl + "/action?action_id=" + query.action_id;
+    const url = `${this.rollmanUrl  }/action?action_id=${  query.action_id}`;
     const response = await fetch(url);
     if (!response.ok) {
-      throw new Error("Rollman query failed " + url);
+      throw new Error(`Rollman query failed ${  url}`);
     }
     const rollmanResponse: RollmanActionQueryResponse = await response.json();
     return rollmanResponse;
@@ -388,10 +388,10 @@ export class NordMetrics {
 
   // Helper to query prometheus.
   async queryPrometheus(params: string): Promise<number> {
-    const url = this.prometheusUrl + "?query=" + params;
+    const url = `${this.prometheusUrl  }?query=${  params}`;
     const response = await fetch(url);
     if (!response.ok) {
-      throw new Error("Prometheus query failed " + url);
+      throw new Error(`Prometheus query failed ${  url}`);
     }
     const json = await response.json();
     // Prometheus HTTP API: https://prometheus.io/docs/prometheus/latest/querying/api/
