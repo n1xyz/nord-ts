@@ -1,5 +1,17 @@
 import * as proto from "./gen/nord";
 
+
+/**
+ * The peak TPS rate is queried over the specified period.
+ * The period is specified in units of: {hour, day, week, month, year}.
+ * Example inputs:
+ *  1. AggregateMetrics.txPeakTpsPeriod = 3,
+ *     AggregateMetrics.txPeakTpsPeriodUnit = "d" => Peak TPS over last 3 days.
+ *  1. AggregateMetrics.txPeakTpsPeriod = 1,
+ *     AggregateMetrics.txPeakTpsPeriodUnit = "w" => Peak TPS over last week.
+ */
+export type PeakTpsPeriodUnit = "h" | "d" | "w" | "m" | "y";
+
 export type Actions =
   | proto.nord.Action.CreateSession
   | proto.nord.Action.Deposit
@@ -7,10 +19,19 @@ export type Actions =
   | proto.nord.Action.CancelOrderById
   | proto.nord.Action.PlaceOrder;
 
+export interface NordConfig{
+  nordUrl: string,
+  evmUrl: string,
+  prometheusUrl: string,
+  rollmanUrl: string,
+  tokenInfos: ERC20TokenInfo[]
+}
+
 export interface WithdrawParams {
   tokenId: number;
   userId: number;
   amount: number;
+  nonce:number;
 }
 
 export interface ERC20TokenInfo{
@@ -24,6 +45,7 @@ export interface CreateSessionParams {
   keyType: KeyType;
   pubkey: Uint8Array;
   expiryTs: number;
+  nonce:number;
 }
 
 export interface PlaceOrderParams {
@@ -35,6 +57,7 @@ export interface PlaceOrderParams {
   price: number;
   size: number;
   sessionId: number;
+  nonce:number;
 }
 
 export interface CancelOrderParams {
@@ -42,6 +65,7 @@ export interface CancelOrderParams {
   userId: number;
   orderId: number;
   sessionId: number;
+  nonce:number;
 }
 
 export enum KeyType {
@@ -62,7 +86,7 @@ export enum FillMode {
   FillOrKill,
 }
 
-export interface SubsriberConfig {
+export interface SubscriberConfig {
   streamURL: string;
   maxBufferLen?: number;
 }
@@ -92,6 +116,89 @@ export interface DeltaEvent {
 }
 
 /**
+ * Query the transactions in the specified L2 block.
+ * @field {number} block_number specifies the block number to query.
+ *                 If not specified, transactions from latest block
+ *                 are returned.
+ */
+export interface BlockQuery {
+  block_number?: number;
+}
+
+/**
+ * Response for BlockQuery.
+ * @field {number} block_number specifies the block number being returned.
+ * @field {BlockActions} actions are the list of transactions from the block.
+ */
+export interface BlockQueryResponse {
+  block_number: number;
+  actions: ActionInfo[];
+}
+
+/**
+ * Query the action for the specified action id.
+ * @field {number} action_id specifies the action to query.
+ */
+export interface ActionQuery {
+  action_id: number;
+}
+
+/**
+ * Response for ActionQuery.
+ * @field {number} block_number the block the action is part of.
+ *                 If the action is not yet included in any block,
+ *                 null is returned.
+ * @field {Action} action in protobuf format.
+ */
+export interface ActionQueryResponse {
+  block_number?: number;
+  action: proto.nord.Action;
+}
+
+/**
+ * Info about the block transaction.
+ * @field {number} action_id is the action identifier.
+ * @field {Action} action in protobuf format.
+ */
+export interface ActionInfo {
+  action_id: number;
+  action: proto.nord.Action;
+}
+
+
+/**
+ * Aggregate metrics
+ * @field {number} blocks_total: Total number of L2 blocks.
+ * @field {number} tx_total: Total number of transactions.
+ * @field {number} tx_tps: Transaction throughput.
+ * @field {number} tx_tps_peak: Peak transaction throughput.
+ * @field {number} request_latency_average: Average request latency.
+ */
+export interface AggregateMetrics {
+  blocks_total: number;
+  tx_total: number;
+  tx_tps: number;
+  tx_tps_peak: number;
+  request_latency_average: number;
+}
+
+// The formats returned by rollman.
+export interface RollmanBlockQueryResponse {
+  block_number: number;
+  actions: RollmanActionInfo[];
+}
+
+export interface RollmanActionQueryResponse {
+  block_number?: number;
+  action_pb: Uint8Array;
+}
+
+export interface RollmanActionInfo {
+  action_id: number;
+  action_pb: Uint8Array;
+}
+
+/**
  * Converts a `FillMode` enum to its corresponding protobuf representation.
  *
  * @param x - The fill mode to convert.
@@ -107,3 +214,5 @@ export function fillModeToProtoFillMode(x: FillMode): proto.nord.FillMode {
   if (x === FillMode.FillOrKill) return proto.nord.FillMode.FILL_OR_KILL;
   throw new Error("Invalid fill mode");
 }
+
+

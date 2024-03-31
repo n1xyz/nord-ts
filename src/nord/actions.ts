@@ -17,29 +17,57 @@ import {
     decodeDelimited,
     encodeDelimited,
     getCurrentTimestamp,
-    getNonce,
-    sendMessage,
     SESSION_TTL,
     toShiftedNumber
 } from "../utils";
 import * as proto from "../gen/nord";
+import fetch from "node-fetch";
 
-export class CreateSessionAction {
-    url: string;
+export class Action {
+    nordUrl: string;
+
+    constructor(nordUrl: string) {
+        this.nordUrl = nordUrl;
+    }
+
+    /**
+     * Sends a post request to the defined NORD_URL endpoint.
+     * @param payload - The message data to send.
+     * @returns Response data in Uint8Array.
+     */
+    protected async sendMessage(payload: Uint8Array): Promise<Uint8Array> {
+        try {
+            const response = await fetch(this.nordUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: payload,
+            });
+            const buffer = await response.arrayBuffer();
+            return new Uint8Array(buffer);
+        } catch (e: any) {
+            return e;
+        }
+    }
+}
+
+export class CreateSessionAction extends Action {
     message: Uint8Array;
     walletSignFn: (message: Hex) => Promise<string>;
 
     constructor(
-        url: string,
+        url: string, nonce: number,
         sessionPubkey: Uint8Array,
         walletSignFn: (message: Hex) => Promise<string>,
         userId: number,
     ) {
-        this.url = url;
+        super(url)
         this.walletSignFn = walletSignFn;
 
         this.message = CreateSessionAction.getPayload({
             userId,
+            nonce,
             keyType: KeyType.Ed25119,
             pubkey: sessionPubkey,
             expiryTs: getCurrentTimestamp() + SESSION_TTL,
@@ -51,7 +79,7 @@ export class CreateSessionAction {
         const signature = await this.walletSignFn(hash);
         assert(signature.length === 64);
         const body = new Uint8Array([...this.message, ...ethers.getBytes(signature.slice(0, -2))]);
-        const resp = decodeDelimited(await sendMessage(body));
+        const resp = decodeDelimited(await this.sendMessage(body));
         if (resp.has_err) {
             throw new Error(`Could not create a new session, reason: ${resp.err}`);
         }
@@ -79,7 +107,7 @@ export class CreateSessionAction {
 
         const pbCreateSession = proto.nord.Action.fromObject({
             current_timestamp: getCurrentTimestamp(),
-            nonce: getNonce(),
+            nonce: params.nonce,
             create_session: new proto.nord.Action.CreateSession({
                 user_id: params.userId,
                 blst_pubkey: params.pubkey,
@@ -91,25 +119,25 @@ export class CreateSessionAction {
     }
 }
 
-export class WithdrawAction {
-    url: string;
+export class WithdrawAction extends Action {
     message: Uint8Array;
     signFn: (message: Hex) => Promise<Uint8Array>;
 
     constructor(
-        url: string,
+        url: string, nonce: number,
         signFn: (message: Hex) => Promise<Uint8Array>,
         sizeDecimals: number,
         tokenId: number,
         userId: number,
         amount: number,
     ) {
-        this.url = url;
+        super(url);
         this.signFn = signFn;
 
         this.message = WithdrawAction.getPayload({
             tokenId,
             userId,
+            nonce,
             amount: toShiftedNumber(amount, sizeDecimals),
         });
     }
@@ -117,7 +145,7 @@ export class WithdrawAction {
     async send(): Promise<void> {
         const signature = await this.signFn(this.message);
         const body = new Uint8Array([...this.message, ...signature]);
-        const resp = decodeDelimited(await sendMessage(body));
+        const resp = decodeDelimited(await this.sendMessage(body));
         if (resp.has_err) {
             throw new Error(`Could not withdraw, reason: ${resp.err}`);
         }
@@ -142,7 +170,7 @@ export class WithdrawAction {
 
         const pbWithdraw = proto.nord.Action.fromObject({
             current_timestamp: getCurrentTimestamp(),
-            nonce: getNonce(),
+            nonce: params.nonce,
             withdraw: new proto.nord.Action.Withdraw({
                 token_id: params.tokenId,
                 user_id: params.userId,
@@ -154,13 +182,12 @@ export class WithdrawAction {
     }
 }
 
-export class PlaceOrderAction {
-    url: string;
+export class PlaceOrderAction extends Action {
     message: Uint8Array;
     signFn: (message: Hex) => Promise<Uint8Array>;
 
     constructor(
-        url: string,
+        url: string, nonce: number,
         signFn: (message: Hex) => Promise<Uint8Array>,
         sizeDecimals: number,
         priceDecimals: number,
@@ -173,10 +200,11 @@ export class PlaceOrderAction {
         size: number,
         price?: number,
     ) {
-        this.url = url;
+        super(url);
         this.signFn = signFn;
         this.message = PlaceOrderAction.getPayload({
             userId,
+            nonce,
             marketId,
             side,
             fillMode,
@@ -190,7 +218,7 @@ export class PlaceOrderAction {
     async send(): Promise<number> {
         const signature = await this.signFn(this.message);
         const body = new Uint8Array([...this.message, ...signature]);
-        const resp = decodeDelimited(await sendMessage(body));
+        const resp = decodeDelimited(await this.sendMessage(body));
         if (resp.has_err) {
             throw new Error(`Could not place the order, reason: ${resp.err}`);
         }
@@ -224,7 +252,7 @@ export class PlaceOrderAction {
 
         const pbPlaceOrder = proto.nord.Action.fromObject({
             current_timestamp: getCurrentTimestamp(),
-            nonce: getNonce(),
+            nonce: params.nonce,
             place_order: new proto.nord.Action.PlaceOrder({
                 market_id: params.marketId,
                 side:
@@ -241,24 +269,24 @@ export class PlaceOrderAction {
     }
 }
 
-export class CancelOrderAction {
-    url: string;
+export class CancelOrderAction extends Action {
     message: Uint8Array;
     signFn: (message: Hex) => Promise<Uint8Array>;
 
     constructor(
-        url: string,
+        url: string, nonce: number,
         signFn: (message: Hex) => Promise<Uint8Array>,
         userId: number,
         sessionId: number,
         marketId: number,
         orderId: number,
     ) {
-        this.url = url;
+        super(url);
         this.signFn = signFn;
 
         this.message = CancelOrderAction.getPayload({
             userId,
+            nonce,
             sessionId,
             marketId,
             orderId,
@@ -268,7 +296,7 @@ export class CancelOrderAction {
     async send(): Promise<number> {
         const signature = await this.signFn(this.message);
         const body = new Uint8Array([...this.message, ...signature]);
-        const resp = decodeDelimited(await sendMessage(body));
+        const resp = decodeDelimited(await this.sendMessage(body));
         if (resp.has_err) {
             throw new Error(`Could not cancel the order, reason: ${resp.err}`);
         }
@@ -290,7 +318,7 @@ export class CancelOrderAction {
     static getPayload(params: CancelOrderParams): Uint8Array {
         const pbCancelOrder = proto.nord.Action.fromObject({
             current_timestamp: getCurrentTimestamp(),
-            nonce: getNonce(),
+            nonce: params.nonce,
             cancel_order_by_id: new proto.nord.Action.CancelOrderById({
                 order_id: params.orderId,
                 session_id: params.sessionId,

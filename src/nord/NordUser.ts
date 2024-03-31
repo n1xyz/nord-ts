@@ -1,31 +1,14 @@
-import fetch from "node-fetch";
-import WebSocket from "ws";
 import {Hex} from "@noble/curves/src/abstract/utils";
 import {BrowserProvider, ethers, SigningKey} from "ethers";
 //@ts-ignore
 import {secp256k1} from "secp256k1";
-import {
-    type DeltaEvent,
-    ERC20TokenInfo,
-    type FillMode,
-    type Info,
-    type Market,
-    Side,
-    type SubsriberConfig,
-    type Token,
-} from "../types";
-import {assert, findMarket, findToken, MAX_BUFFER_LEN,} from "../utils";
-import {
-    DEFAULT_FUNDING_AMOUNTS,
-    DEV_CONTRACT_ADDRESS,
-    DEV_TOKEN_INFOS,
-    EVM_DEV_URL,
-    FAUCET_PRIVATE_ADDRESS,
-    NORD_DEV_URL
-} from "../const";
+import {DEFAULT_FUNDING_AMOUNTS, DEV_CONTRACT_ADDRESS, FAUCET_PRIVATE_ADDRESS} from "../const";
+import {assert, findMarket, findToken} from "../utils";
 import {ERC20_ABI} from "../scs/abis/ERC20_ABI";
 import {CancelOrderAction, CreateSessionAction, PlaceOrderAction, WithdrawAction} from "./actions";
 import {NORD_RAMP_FACET_ABI} from "../scs/abis/NORD_RAMP_FACET_ABI";
+import {FillMode, Side} from "../types";
+import {Nord} from "./Nord";
 
 export class NordUser {
     nord: Nord;
@@ -171,80 +154,5 @@ export class NordUser {
         );
 
         return await message.send();
-    }
-}
-
-export class Nord {
-    nordUrl: string;
-    evmUrl: string;
-    tokenInfos: ERC20TokenInfo[];
-    markets: Market[];
-    tokens: Token[];
-
-    constructor(nordUrl: string, evmUrl: string, tokenInfos: ERC20TokenInfo[]) {
-        this.nordUrl = nordUrl;
-        this.evmUrl = evmUrl;
-        this.tokenInfos = tokenInfos;
-        this.markets = [];
-        this.tokens = [];
-    }
-
-    async fetchNordInfo() {
-        const response = await fetch(`${this.nordUrl}/info`, {method: "GET"});
-        const info: Info = await response.json();
-        this.markets = info.markets;
-        this.tokens = info.tokens;
-    }
-
-    public static async initNord(nordUrl: string, evmUrl: string, tokenInfos: ERC20TokenInfo[]): Promise<Nord> {
-        const nord = new Nord(nordUrl, evmUrl, tokenInfos);
-        await nord.fetchNordInfo();
-        return nord;
-    }
-
-    public static async initDevNord(): Promise<Nord> {
-        const nord = new Nord(NORD_DEV_URL, EVM_DEV_URL, DEV_TOKEN_INFOS);
-        await nord.fetchNordInfo();
-        return nord;
-    }
-}
-
-export class Subscriber {
-    streamURL: string;
-    buffer: DeltaEvent[];
-    maxBufferLen: number;
-
-    constructor(config: SubsriberConfig) {
-        this.streamURL = config.streamURL;
-        this.buffer = [];
-        this.maxBufferLen = config.maxBufferLen ?? MAX_BUFFER_LEN;
-    }
-
-    subscribe(): void {
-        const ws = new WebSocket(this.streamURL);
-
-        ws.on("open", () => {
-            console.log(`Connected to ${this.streamURL}`);
-        });
-
-        ws.on("message", (rawData) => {
-            const message: string = rawData.toLocaleString();
-            const event: DeltaEvent = JSON.parse(message);
-            if (!this.checkEvent(event)) {
-                return;
-            }
-            this.buffer.push(event);
-            if (this.buffer.length > this.maxBufferLen) {
-                this.buffer.shift();
-            }
-        });
-
-        ws.on("close", () => {
-            console.log(`Disconnected from ${this.streamURL}`);
-        });
-    }
-
-    checkEvent(_event: DeltaEvent): boolean {
-        return true;
     }
 }

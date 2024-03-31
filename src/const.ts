@@ -18,6 +18,8 @@ export const DEV_CONTRACT_ADDRESS = "http://localhost:3000"
 
 export const NORD_DEV_URL = "http://localhost:3000"
 export const EVM_DEV_URL = "http://localhost:8545"
+export const ROLLMAN_DEV_URL="http://localhost:3005"
+export const PROMETHEUS_DEV_URL="http://localhost:9090"
 export const DEV_TOKEN_INFOS: ERC20TokenInfo[] = [
     {
         address: '0x9a9f2ccfde556a7e9ff0848998aa4a0cfd8863ae',
