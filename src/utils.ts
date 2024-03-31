@@ -12,7 +12,7 @@ export const ZERO_DECIMAL = new Decimal(0);
 export const MAX_BUFFER_LEN = 10_000;
 
 const NORD_URL = "http://localhost:3000/action";
-const MAX_PAYLOAD_SIZE = 100 * 1000; // 100 kB
+const MAX_PAYLOAD_SIZE = 100 * 1024; // 100 kB
 
 const ROLLMAN_URL = "http://localhost:9248/block_query";
 const PROMETHEUS_URL = "http://localhost:9090/api/v1/query";
