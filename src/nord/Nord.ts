@@ -19,23 +19,32 @@ import {
     type Token,
 } from "../types";
 import {decodeActionDelimited, MAX_BUFFER_LEN} from "../utils";
-import {DEV_TOKEN_INFOS, EVM_DEV_URL, NORD_DEV_URL, PROMETHEUS_DEV_URL, ROLLMAN_DEV_URL} from "../const";
+import {
+    DEV_CONTRACT_ADDRESS,
+    DEV_TOKEN_INFOS,
+    EVM_DEV_URL,
+    NORD_DEV_URL,
+    PROMETHEUS_DEV_URL,
+    ROLLMAN_DEV_URL
+} from "../const";
 
 export class Nord {
     nordUrl: string;
     evmUrl: string;
     prometheusUrl: string;
+    contractAddress: string;
     rollmanUrl: string;
     tokenInfos: ERC20TokenInfo[];
     markets: Market[];
     tokens: Token[];
 
-    constructor({nordUrl, evmUrl, prometheusUrl, rollmanUrl, tokenInfos}: NordConfig) {
+    constructor({nordUrl, evmUrl, prometheusUrl, rollmanUrl, tokenInfos,contractAddress}: NordConfig) {
         this.nordUrl = nordUrl;
         this.evmUrl = evmUrl;
         this.prometheusUrl = prometheusUrl + "/api/v1/query";
         this.rollmanUrl = rollmanUrl;
         this.tokenInfos = tokenInfos;
+        this.contractAddress = contractAddress;
         this.markets = [];
         this.tokens = [];
     }
@@ -45,6 +54,7 @@ export class Nord {
         const info: Info = await response.json();
         this.markets = info.markets;
         this.tokens = info.tokens;
+        console.log(this.markets, this.tokens)
     }
 
     public static async initNord(nordConfig: NordConfig): Promise<Nord> {
@@ -59,7 +69,8 @@ export class Nord {
             nordUrl: NORD_DEV_URL,
             prometheusUrl: PROMETHEUS_DEV_URL,
             rollmanUrl: ROLLMAN_DEV_URL,
-            tokenInfos: DEV_TOKEN_INFOS
+            tokenInfos: DEV_TOKEN_INFOS,
+            contractAddress: DEV_CONTRACT_ADDRESS
         });
         await nord.fetchNordInfo();
         return nord;
@@ -96,8 +107,8 @@ export class Nord {
 
     // Query the aggregate metrics across nord and rollman.
     async aggregateMetrics(
-        txPeakTpsPeriod: number,
-        txPeakTpsPeriodUnit: PeakTpsPeriodUnit,
+        txPeakTpsPeriod = 1,
+        txPeakTpsPeriodUnit: PeakTpsPeriodUnit = PeakTpsPeriodUnit.Day,
     ): Promise<AggregateMetrics> {
         // Get the latest block number for L2 blocks.
         const blockQuery: BlockQuery = {};
@@ -109,7 +120,7 @@ export class Nord {
         return {
             blocks_total: rollmanResponse.block_number,
             tx_total: await this.queryPrometheus("nord_requests_count"),
-            tx_tps: await this.queryPrometheus("rate(nord_requests_count[1m])"),
+            tx_tps: await this.getCurrentTps(),
             tx_tps_peak: await this.queryPrometheus(query),
             request_latency_average: await this.queryPrometheus(
                 'nord_requests_latency{quantile="0.5"}',
@@ -117,7 +128,11 @@ export class Nord {
         };
     }
 
-    // Helper to query rollman for block info.
+    private async getCurrentTps() {
+        return await this.queryPrometheus("rate(nord_requests_count[1m])");
+    }
+
+// Helper to query rollman for block info.
     async blockQueryRollman(
         query: BlockQuery,
     ): Promise<RollmanBlockQueryResponse> {
@@ -168,24 +183,6 @@ export class Subscriber {
         this.maxBufferLen = config.maxBufferLen ?? MAX_BUFFER_LEN;
     }
 
-
-    private lastTs = 0;
-    private lastNonce = 0;
-
-    /**
-     * Generates a nonce based on the current timestamp.
-     * @returns Generated nonce as a number.
-     */
-    getNonce(): number {
-        const ts = Date.now() / 1000;
-        if (ts === this.lastTs) {
-            this.lastNonce += 1;
-        } else {
-            this.lastTs = ts;
-            this.lastNonce = 0;
-        }
-        return this.lastNonce;
-    }
 
     subscribe(): void {
         const ws = new WebSocket(this.streamURL);

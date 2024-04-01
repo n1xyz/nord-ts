@@ -1,7 +1,6 @@
 import {Hex} from "@noble/curves/src/abstract/utils";
 import {BrowserProvider, ethers, SigningKey} from "ethers";
-//@ts-ignore
-import {secp256k1} from "secp256k1";
+import secp256k1 from "secp256k1";
 import {DEFAULT_FUNDING_AMOUNTS, DEV_CONTRACT_ADDRESS, FAUCET_PRIVATE_ADDRESS} from "../const";
 import {assert, findMarket, findToken} from "../utils";
 import {ERC20_ABI} from "../scs/abis/ERC20_ABI";
@@ -14,20 +13,55 @@ export class NordUser {
     nord: Nord;
     address: string;
     walletSignFn: (message: Hex) => Promise<string>;
-    sessionSignFn: (message: Hex) => Promise<Uint8Array>;
-    publicKey = "";
+    sessionSignFn: (message: Uint8Array) => Promise<Uint8Array>;
     userId = -1;
     sessionId = -1;
 
+
+    publicKey = "";
+    lastTs = 0;
+    lastNonce = 0;
+
+    clone(): NordUser {
+        const newUser = new NordUser(
+            this.nord,
+            this.address,
+            this.walletSignFn,
+            this.sessionSignFn,
+            this.userId,
+            this.sessionId
+        )
+        newUser.publicKey = this.publicKey
+        newUser.lastTs = this.lastTs
+        newUser.lastNonce = this.lastNonce
+        return newUser
+    }
+
     get publicKeyPresent() {
         return this.publicKey != ""
+    }
+
+
+    /**
+     * Generates a nonce based on the current timestamp.
+     * @returns Generated nonce as a number.
+     */
+    getNonce(): number {
+        const ts = Date.now() / 1000;
+        if (ts === this.lastTs) {
+            this.lastNonce += 1;
+        } else {
+            this.lastTs = ts;
+            this.lastNonce = 0;
+        }
+        return this.lastNonce;
     }
 
     constructor(
         nord: Nord,
         address: string,
         walletSignFn: (message: Hex) => Promise<string>,
-        sessionSignFn: (message: Hex) => Promise<Uint8Array>,
+        sessionSignFn: (message: Uint8Array) => Promise<Uint8Array>,
         userId = -1,
         sessionId = -1
     ) {
@@ -39,17 +73,38 @@ export class NordUser {
         this.sessionId = sessionId;
     }
 
-    async obtainPublicKey() {
-        const message = "Layer N - Nord"
-        const msgHash = ethers.hashMessage(message);
-        const msgHashBytes = ethers.getBytes(msgHash);
-        const signature = await this.walletSignFn(message)
-        const recoveredPubKey = SigningKey.recoverPublicKey(msgHashBytes, signature);
-        const publicKeyBuffer = Buffer.from(recoveredPubKey.slice(2), 'hex'); // Remove '0x' prefix and convert to Buffer
+    async updateUserId() {
+        await this.setPublicKey();
+        const userId: any = await (await fetch('http://localhost:3000/user_id?pubkey=0383135b54105d4a7aae60c08fc45f9687181b4fdfc625bd1a753fa7397fed75')).json() as {
+            error: string
+        } | number
+        if (isNaN(userId)) {
+            if (userId.error == 'INTERNAL_SERVER_ERROR') {
+                this.userId = -1;
+                return;
+            }
+            throw new Error("Could not fetch user id!")
+        }
+        this.userId = userId as number
+    }
+
+    async setPublicKey() {
+        const publicKeyBuffer = await NordUser.extractPublicKey(this.walletSignFn);
         this.publicKey = ethers.hashMessage(secp256k1.publicKeyConvert(publicKeyBuffer, true).slice(0, -2));
     }
 
+    static async extractPublicKey(walletSignFn: (message: Hex) => Promise<string>) {
+        const message = "Layer N - Nord"
+        const msgHash = ethers.hashMessage(message);
+        const msgHashBytes = ethers.getBytes(msgHash);
+        const signature = await walletSignFn(message)
+        const recoveredPubKey = SigningKey.recoverPublicKey(msgHashBytes, signature);
+        // Remove '0x' prefix and convert to Buffer
+        return Buffer.from(recoveredPubKey.slice(2), 'hex');
+    }
+
     async fundWallet() {
+        console.log('ahem')
         const provider = new ethers.JsonRpcProvider(this.nord.evmUrl);
         const wallet = new ethers.Wallet(FAUCET_PRIVATE_ADDRESS, provider);
         assert(DEFAULT_FUNDING_AMOUNTS['ETH'] != null);
@@ -73,7 +128,8 @@ export class NordUser {
         assert(sessionPk.length === 32);
 
         const message = new CreateSessionAction(
-            `${this.nord.nordUrl}/action`,
+            this.nord.nordUrl,
+            this.getNonce(),
             sessionPk,
             this.walletSignFn,
             this.userId,
@@ -103,7 +159,8 @@ export class NordUser {
         amount: number
     ): Promise<void> {
         const message = new WithdrawAction(
-            `${this.nord.nordUrl}/action`,
+            this.nord.nordUrl,
+            this.getNonce(),
             this.sessionSignFn,
             findToken(this.nord.tokens, tokenId).decimals,
             tokenId,
@@ -123,7 +180,8 @@ export class NordUser {
         price?: number,
     ): Promise<number> {
         const message = new PlaceOrderAction(
-            `${this.nord.nordUrl}/action`,
+            this.nord.nordUrl,
+            this.getNonce(),
             this.sessionSignFn,
             findMarket(this.nord.markets, marketId).sizeDecimals,
             findMarket(this.nord.markets, marketId).priceDecimals,
@@ -145,7 +203,8 @@ export class NordUser {
         orderId: number
     ): Promise<number> {
         const message = new CancelOrderAction(
-            `${this.nord.nordUrl}/action`,
+            this.nord.nordUrl,
+            this.getNonce(),
             this.sessionSignFn,
             this.userId,
             this.sessionId,

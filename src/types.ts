@@ -10,7 +10,13 @@ import * as proto from "./gen/nord";
  *  1. AggregateMetrics.txPeakTpsPeriod = 1,
  *     AggregateMetrics.txPeakTpsPeriodUnit = "w" => Peak TPS over last week.
  */
-export type PeakTpsPeriodUnit = "h" | "d" | "w" | "m" | "y";
+export enum PeakTpsPeriodUnit {
+  Hour = "h",
+  Day = "d",
+  Week= "w",
+  Month = "m",
+  Year = "y",
+}
 
 export type Actions =
   | proto.nord.Action.CreateSession
@@ -24,6 +30,7 @@ export interface NordConfig{
   evmUrl: string,
   prometheusUrl: string,
   rollmanUrl: string,
+  contractAddress: string,
   tokenInfos: ERC20TokenInfo[]
 }
 

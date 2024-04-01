@@ -24,10 +24,10 @@ import * as proto from "../gen/nord";
 import fetch from "node-fetch";
 
 export class Action {
-    nordUrl: string;
+    nordActionUrl: string;
 
     constructor(nordUrl: string) {
-        this.nordUrl = nordUrl;
+        this.nordActionUrl = `${nordUrl}/action`;
     }
 
     /**
@@ -37,7 +37,7 @@ export class Action {
      */
     protected async sendMessage(payload: Uint8Array): Promise<Uint8Array> {
         try {
-            const response = await fetch(this.nordUrl, {
+            const response = await fetch(this.nordActionUrl, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -121,11 +121,11 @@ export class CreateSessionAction extends Action {
 
 export class WithdrawAction extends Action {
     message: Uint8Array;
-    signFn: (message: Hex) => Promise<Uint8Array>;
+    signFn: (message: Uint8Array) => Promise<Uint8Array>;
 
     constructor(
         url: string, nonce: number,
-        signFn: (message: Hex) => Promise<Uint8Array>,
+        signFn: (message: Uint8Array) => Promise<Uint8Array>,
         sizeDecimals: number,
         tokenId: number,
         userId: number,
@@ -184,11 +184,11 @@ export class WithdrawAction extends Action {
 
 export class PlaceOrderAction extends Action {
     message: Uint8Array;
-    signFn: (message: Hex) => Promise<Uint8Array>;
+    signFn: (message: Uint8Array) => Promise<Uint8Array>;
 
     constructor(
         url: string, nonce: number,
-        signFn: (message: Hex) => Promise<Uint8Array>,
+        signFn: (message: Uint8Array) => Promise<Uint8Array>,
         sizeDecimals: number,
         priceDecimals: number,
         userId: number,
@@ -271,11 +271,11 @@ export class PlaceOrderAction extends Action {
 
 export class CancelOrderAction extends Action {
     message: Uint8Array;
-    signFn: (message: Hex) => Promise<Uint8Array>;
+    signFn: (message: Uint8Array) => Promise<Uint8Array>;
 
     constructor(
         url: string, nonce: number,
-        signFn: (message: Hex) => Promise<Uint8Array>,
+        signFn: (message: Uint8Array) => Promise<Uint8Array>,
         userId: number,
         sessionId: number,
         marketId: number,

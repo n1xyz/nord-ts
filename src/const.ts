@@ -1,6 +1,12 @@
 // DEV SETUP:
 import {ERC20TokenInfo} from "./types";
 
+
+const NORD_PORT = "3000";
+const EVM_PORT = "8545";
+const ROLLMAN_PORT = "3005";
+const PROMETHEUS_PORT = "9090";
+
 export const DEBUG_KEYS = [
     "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
     "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
@@ -14,12 +20,13 @@ export const DEBUG_KEYS = [
     "0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6"
 ]
 
-export const DEV_CONTRACT_ADDRESS = "http://localhost:3000"
 
-export const NORD_DEV_URL = "http://localhost:3000"
-export const EVM_DEV_URL = "http://localhost:8545"
-export const ROLLMAN_DEV_URL="http://localhost:3005"
-export const PROMETHEUS_DEV_URL="http://localhost:9090"
+export const DEV_URL = "http://localhost";
+export const NORD_DEV_URL = DEV_URL + ":" + NORD_PORT
+export const EVM_DEV_URL = DEV_URL + ":" + EVM_PORT
+export const ROLLMAN_DEV_URL = DEV_URL + ":" + ROLLMAN_PORT
+export const PROMETHEUS_DEV_URL = DEV_URL + ":" + PROMETHEUS_PORT
+export const DEV_CONTRACT_ADDRESS = '0x2279b7a0a67db372996a5fab50d91eaa73d2ebe6';
 export const DEV_TOKEN_INFOS: ERC20TokenInfo[] = [
     {
         address: '0x9a9f2ccfde556a7e9ff0848998aa4a0cfd8863ae',
