@@ -1,4 +1,3 @@
-import {sha256} from "@noble/hashes/sha256";
 import {ethers} from "ethers";
 import {
     CancelOrderParams,
@@ -11,7 +10,6 @@ import {
     WithdrawParams
 } from "../types";
 import {
-    assert,
     checkPubKeyLength,
     decodeDelimited,
     encodeDelimited,
