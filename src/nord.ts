@@ -121,7 +121,7 @@ class WithdrawMessage {
     privateKey: Uint8Array,
     sizeDecimals: number,
     tokenId: number,
-    userId: number,
+    sessionId: number,
     amount: number,
   ) {
     this.url = url;
@@ -129,7 +129,7 @@ class WithdrawMessage {
 
     this.message = withdraw({
       tokenId,
-      userId,
+      sessionId,
       amount: toShiftedNumber(amount, sizeDecimals),
     });
   }
@@ -313,7 +313,7 @@ export class Nord {
       this.privateKey,
       findToken(this.tokens, tokenId).decimals,
       tokenId,
-      this.userId,
+      this.sessionId,
       amount,
     );
 
@@ -478,7 +478,7 @@ export function withdraw(params: WithdrawParams): Uint8Array {
     nonce: getNonce(),
     withdraw: new proto.nord.Action.Withdraw({
       token_id: params.tokenId,
-      user_id: params.userId,
+      session_id: params.sessionId,
       amount: params.amount,
     }),
   });

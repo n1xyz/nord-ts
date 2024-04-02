@@ -15,7 +15,7 @@ export interface DepositParams {
 
 export interface WithdrawParams {
   tokenId: number;
-  userId: number;
+  sessionId: number;
   amount: number;
 }
 
