@@ -13,7 +13,7 @@ import {
     checkPubKeyLength,
     decodeDelimited,
     encodeDelimited,
-    getCurrentTimestamp,
+    getCurrentTimestamp, printableError,
     SESSION_TTL,
     toShiftedNumber
 } from "../utils";
@@ -76,7 +76,7 @@ export class CreateSessionAction extends Action {
         const body = new Uint8Array([...this.message, ...ethers.getBytes(signature.slice(0, -2))]);
         const resp = decodeDelimited(await this.sendMessage(body));
         if (resp.has_err) {
-            throw new Error(`Could not create a new session, reason: ${resp.err}`);
+            throw new Error(`Could not create a new session, reason: ${printableError(resp.err)}`);
         }
 
 
@@ -142,7 +142,7 @@ export class WithdrawAction extends Action {
         const body = new Uint8Array([...this.message, ...signature]);
         const resp = decodeDelimited(await this.sendMessage(body));
         if (resp.has_err) {
-            throw new Error(`Could not withdraw, reason: ${resp.err}`);
+            throw new Error(`Could not withdraw, reason: ${printableError(resp.err)}`);
         }
         // Receipt for Withdraw does not implemented
     }
@@ -215,7 +215,7 @@ export class PlaceOrderAction extends Action {
         const body = new Uint8Array([...this.message, ...signature]);
         const resp = decodeDelimited(await this.sendMessage(body));
         if (resp.has_err) {
-            throw new Error(`Could not place the order, reason: ${resp.err}`);
+            throw new Error(`Could not place the order, reason: ${printableError(resp.err)}`);
         }
 
         return resp.place_order_result.posted.order_id;
@@ -293,7 +293,7 @@ export class CancelOrderAction extends Action {
         const body = new Uint8Array([...this.message, ...signature]);
         const resp = decodeDelimited(await this.sendMessage(body));
         if (resp.has_err) {
-            throw new Error(`Could not cancel the order, reason: ${resp.err}`);
+            throw new Error(`Could not cancel the order, reason: ${printableError(resp.err)}`);
         }
 
         return resp.cancel_order_result.order_id;

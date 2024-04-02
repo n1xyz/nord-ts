@@ -88,7 +88,6 @@ export function decodeActionDelimited(u: Uint8Array): proto.nord.Action {
     return proto.nord.Action.deserialize(u.slice(index + 1, index + 1 + len));
 }
 
-
 /**
  * Decodes a Receipt in length-delimited format.
  * @param u - Encoded Receipt as Uint8Array to decode.
@@ -181,3 +180,12 @@ export function findToken(tokens: Token[], tokenId: number): Token {
 
 
 
+
+export function printableError(e: any): string {
+  if (Number.isInteger(e)) {
+    return proto.nord.Error[e];
+  } else {
+    // DUPLICATE
+    return "Unknown error";
+  }
+}
