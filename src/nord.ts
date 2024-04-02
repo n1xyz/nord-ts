@@ -11,6 +11,7 @@ import {
   checkPubKeyLength,
   findMarket,
   findToken,
+  printableError,
 } from "./utils";
 import {
   type CreateSessionParams,
@@ -70,7 +71,7 @@ class CreateSessionMessage {
     const body = new Uint8Array([...this.message, ...signature]);
     const resp = decodeDelimited(await sendMessage(body));
     if (resp.has_err) {
-      throw new Error(`Could not create a new session, reason: ${resp.err}`);
+      throw new Error(`Could not create a new session, reason: ${printableError(resp.err)}`);
     }
 
     return resp.create_session_result.session_id;
@@ -105,7 +106,7 @@ class DepositMessage {
     const body = new Uint8Array([...this.message, ...signature]);
     const resp = decodeDelimited(await sendMessage(body));
     if (resp.has_err) {
-      throw new Error(`Could not deposit, reason: ${resp.err}`);
+      throw new Error(`Could not deposit, reason: ${printableError(resp.err)}`);
     }
     // Receipt for Deposit does not implemented
   }
@@ -139,7 +140,7 @@ class WithdrawMessage {
     const body = new Uint8Array([...this.message, ...signature]);
     const resp = decodeDelimited(await sendMessage(body));
     if (resp.has_err) {
-      throw new Error(`Could not withdraw, reason: ${resp.err}`);
+      throw new Error(`Could not withdraw, reason: ${printableError(resp.err)}`);
     }
     // Receipt for Withdraw does not implemented
   }
@@ -184,7 +185,7 @@ class PlaceOrderMessage {
     const body = new Uint8Array([...this.message, ...signature]);
     const resp = decodeDelimited(await sendMessage(body));
     if (resp.has_err) {
-      throw new Error(`Could not place the order, reason: ${resp.err}`);
+      throw new Error(`Could not place the order, reason: ${printableError(resp.err)}`);
     }
 
     return resp.place_order_result.posted.order_id;
@@ -220,7 +221,7 @@ class CancelOrderMessage {
     const body = new Uint8Array([...this.message, ...signature]);
     const resp = decodeDelimited(await sendMessage(body));
     if (resp.has_err) {
-      throw new Error(`Could not cancel the order, reason: ${resp.err}`);
+      throw new Error(`Could not cancel the order, reason: ${printableError(resp.err)}`);
     }
 
     return resp.cancel_order_result.order_id;

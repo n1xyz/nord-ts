@@ -1,9 +1,5 @@
 import { Decimal } from "decimal.js";
 import * as proto from "./gen/nord";
-import { ed25519 } from "@noble/curves/ed25519";
-import { bls12_381 as bls } from "@noble/curves/bls12-381";
-import { secp256k1 as secp } from "@noble/curves/secp256k1";
-import { sha256 } from "@noble/hashes/sha256";
 import { KeyType, type Market, type Token } from "./types";
 import fetch from "node-fetch";
 
@@ -12,7 +8,7 @@ export const ZERO_DECIMAL = new Decimal(0);
 export const MAX_BUFFER_LEN = 10_000;
 
 const NORD_URL = "http://localhost:3000/action";
-const MAX_PAYLOAD_SIZE = 100 * 1000; // 100 kB
+const MAX_PAYLOAD_SIZE = 100 * 1024; // 100 kB
 
 /**
  * Query the transactions in the specified L2 block.
@@ -126,31 +122,6 @@ export async function sendMessage(payload: Uint8Array): Promise<Uint8Array> {
   } catch (e: any) {
     return e;
   }
-}
-
-/**
- * Signs an action using the specified secret key and key type.
- * @param action - The action data to be signed.
- * @param sk - Secret key used for signing the action.
- * @param keyType - Type of the key used for signing.
- * @returns A new Uint8Array containing the action followed by its signature.
- */
-export function signAction(
-  action: Uint8Array,
-  sk: Uint8Array,
-  keyType: KeyType,
-): Uint8Array {
-  let sig: Uint8Array;
-  if (keyType === KeyType.Ed25119) {
-    sig = ed25519.sign(action, sk);
-  } else if (keyType === KeyType.Bls12_381) {
-    sig = bls.sign(action, sk);
-  } else if (keyType === KeyType.Secp256k1) {
-    sig = secp.sign(sha256(action), sk).toCompactRawBytes();
-  } else {
-    throw new Error("Invalid key type");
-  }
-  return new Uint8Array([...action, ...sig]);
 }
 
 /**
@@ -406,5 +377,14 @@ export class NordMetrics {
     const json = await response.json();
     // Prometheus HTTP API: https://prometheus.io/docs/prometheus/latest/querying/api/
     return Number(json.data.result[0].value[1]);
+  }
+}
+
+export function printableError(e: any): string {
+  if (Number.isInteger(e)) {
+    return proto.nord.Error[e];
+  } else {
+    // DUPLICATE
+    return proto.nord.Error[0];
   }
 }
