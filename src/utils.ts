@@ -392,3 +392,12 @@ export class NordMetrics {
     return Number(json.data.result[0].value[1]);
   }
 }
+
+export function printableError(e: any): string {
+  if (Number.isInteger(e)) {
+    return proto.nord.Error[e];
+  } else {
+    // DUPLICATE
+    return proto.nord.Error[0];
+  }
+}
