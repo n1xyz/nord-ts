@@ -6,7 +6,7 @@ import {sha256} from "@noble/hashes/sha256";
 import {KeyType, type Market, type Token} from "./types";
 import * as proto from "./gen/nord";
 
-export const SESSION_TTL = 10 * 60;
+export const SESSION_TTL = 10 * 60 * 1000 * 10000;
 export const ZERO_DECIMAL = new Decimal(0);
 export const MAX_BUFFER_LEN = 10_000;
 
@@ -177,5 +177,7 @@ export function findToken(tokens: Token[], tokenId: number): Token {
     }
     return tokens[tokenId];
 }
+
+
 
 

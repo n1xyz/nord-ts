@@ -26,12 +26,13 @@ export const NORD_DEV_URL = DEV_URL + ":" + NORD_PORT
 export const EVM_DEV_URL = DEV_URL + ":" + EVM_PORT
 export const ROLLMAN_DEV_URL = DEV_URL + ":" + ROLLMAN_PORT
 export const PROMETHEUS_DEV_URL = DEV_URL + ":" + PROMETHEUS_PORT
-export const DEV_CONTRACT_ADDRESS = '0x2279b7a0a67db372996a5fab50d91eaa73d2ebe6';
+export const DEV_CONTRACT_ADDRESS = '0x8a791620dd6260079bf849dc5567adc3f2fdc318';
 export const DEV_TOKEN_INFOS: ERC20TokenInfo[] = [
     {
         address: '0x9a9f2ccfde556a7e9ff0848998aa4a0cfd8863ae',
         precision: 6,
-        tokenId: 0
+        tokenId: 0,
+        name: "usdc"
     }
 ]
 export const FAUCET_PRIVATE_ADDRESS = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";

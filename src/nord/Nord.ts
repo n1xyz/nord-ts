@@ -54,7 +54,6 @@ export class Nord {
         const info: Info = await response.json();
         this.markets = info.markets;
         this.tokens = info.tokens;
-        console.log(this.markets, this.tokens)
     }
 
     public static async initNord(nordConfig: NordConfig): Promise<Nord> {

@@ -1,24 +1,25 @@
-import {Hex} from "@noble/curves/src/abstract/utils";
 import {BrowserProvider, ethers, SigningKey} from "ethers";
 import secp256k1 from "secp256k1";
 import {DEFAULT_FUNDING_AMOUNTS, DEV_CONTRACT_ADDRESS, FAUCET_PRIVATE_ADDRESS} from "../const";
 import {assert, findMarket, findToken} from "../utils";
-import {ERC20_ABI} from "../scs/abis/ERC20_ABI";
+import {ERC20_ABI} from "../abis/ERC20_ABI";
 import {CancelOrderAction, CreateSessionAction, PlaceOrderAction, WithdrawAction} from "./actions";
-import {NORD_RAMP_FACET_ABI} from "../scs/abis/NORD_RAMP_FACET_ABI";
-import {FillMode, Side} from "../types";
+import {NORD_RAMP_FACET_ABI} from "../abis/NORD_RAMP_FACET_ABI";
+import {FillMode, Order, Side} from "../types";
 import {Nord} from "./Nord";
 
 export class NordUser {
     nord: Nord;
     address: string;
-    walletSignFn: (message: Hex) => Promise<string>;
+    walletSignFn: (message: Uint8Array | string) => Promise<string>;
     sessionSignFn: (message: Uint8Array) => Promise<Uint8Array>;
+    balances: { [string: string]: number } = {}
+    orders: Order[] = []
     userId = -1;
     sessionId = -1;
 
 
-    publicKey = "";
+    publicKey: Uint8Array | undefined;
     lastTs = 0;
     lastNonce = 0;
 
@@ -35,10 +36,6 @@ export class NordUser {
         newUser.lastTs = this.lastTs
         newUser.lastNonce = this.lastNonce
         return newUser
-    }
-
-    get publicKeyPresent() {
-        return this.publicKey != ""
     }
 
 
@@ -60,7 +57,7 @@ export class NordUser {
     constructor(
         nord: Nord,
         address: string,
-        walletSignFn: (message: Hex) => Promise<string>,
+        walletSignFn: (message: Uint8Array | string) => Promise<string>,
         sessionSignFn: (message: Uint8Array) => Promise<Uint8Array>,
         userId = -1,
         sessionId = -1
@@ -74,8 +71,8 @@ export class NordUser {
     }
 
     async updateUserId() {
-        await this.setPublicKey();
-        const userId: any = await (await fetch('http://localhost:3000/user_id?pubkey=0383135b54105d4a7aae60c08fc45f9687181b4fdfc625bd1a753fa7397fed75')).json() as {
+        const hexPubkey = ethers.hexlify(this.publicKey!).slice(2);
+        const userId: any = await (await fetch('http://localhost:3000/user_id?pubkey=' + hexPubkey)).json() as {
             error: string
         } | number
         if (isNaN(userId)) {
@@ -88,23 +85,37 @@ export class NordUser {
         this.userId = userId as number
     }
 
-    async setPublicKey() {
-        const publicKeyBuffer = await NordUser.extractPublicKey(this.walletSignFn);
-        this.publicKey = ethers.hashMessage(secp256k1.publicKeyConvert(publicKeyBuffer, true).slice(0, -2));
+    async fetchInfo() {
+        if (this.userId != -1) {
+            // todo:implement class
+            const data: any = await (await fetch('http://localhost:3000/account?user_id=' + this.userId)).json()
+            for (const balance of data.balances) {
+                this.balances[balance.token] = balance.amount
+            }
+            this.orders = data.orders.map((order: any) => {
+                return {
+                    orderId: order.orderId,
+                    isLong: order.size == "bid",
+                    size: order.size,
+                    price: order.price,
+                    marketId: order.marketId
+                }
+            })
+        }
     }
 
-    static async extractPublicKey(walletSignFn: (message: Hex) => Promise<string>) {
+    async setPublicKey() {
+
         const message = "Layer N - Nord"
         const msgHash = ethers.hashMessage(message);
         const msgHashBytes = ethers.getBytes(msgHash);
-        const signature = await walletSignFn(message)
+        const signature = await this.walletSignFn(message)
         const recoveredPubKey = SigningKey.recoverPublicKey(msgHashBytes, signature);
-        // Remove '0x' prefix and convert to Buffer
-        return Buffer.from(recoveredPubKey.slice(2), 'hex');
+        const publicKeyBuffer = Buffer.from(recoveredPubKey.slice(2), 'hex')
+        this.publicKey = secp256k1.publicKeyConvert(publicKeyBuffer, true);
     }
 
     async fundWallet() {
-        console.log('ahem')
         const provider = new ethers.JsonRpcProvider(this.nord.evmUrl);
         const wallet = new ethers.Wallet(FAUCET_PRIVATE_ADDRESS, provider);
         assert(DEFAULT_FUNDING_AMOUNTS['ETH'] != null);
@@ -126,7 +137,6 @@ export class NordUser {
         sessionPk: Uint8Array,
     ): Promise<void> {
         assert(sessionPk.length === 32);
-
         const message = new CreateSessionAction(
             this.nord.nordUrl,
             this.getNonce(),
@@ -147,10 +157,12 @@ export class NordUser {
             const erc20Contract = new ethers.Contract(erc20.address, ERC20_ABI, await provider.getSigner());
             const approveTx = await erc20Contract.approve(DEV_CONTRACT_ADDRESS, ethers.parseUnits(amount.toString(), erc20.precision), {gasLimit: 1000000});
             await approveTx.wait();
-        } else {
+
             const nordContract = new ethers.Contract(DEV_CONTRACT_ADDRESS, NORD_RAMP_FACET_ABI, await provider.getSigner());
-            const depositTx = await nordContract.depositUnchecked(this.publicKey, BigInt(0), ethers.parseUnits(amount.toString(), 6), {gasLimit: 1000000});
+            const depositTx = await nordContract.depositUnchecked(this.publicKey, BigInt(0), ethers.parseUnits(amount.toString(), erc20.precision), {gasLimit: 1000000});
             await depositTx.wait();
+        } else {
+            //     todo:implement eth deposits
         }
     }
 

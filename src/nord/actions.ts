@@ -1,5 +1,4 @@
 import {sha256} from "@noble/hashes/sha256";
-import {Hex} from "@noble/curves/src/abstract/utils";
 import {ethers} from "ethers";
 import {
     CancelOrderParams,
@@ -54,12 +53,12 @@ export class Action {
 
 export class CreateSessionAction extends Action {
     message: Uint8Array;
-    walletSignFn: (message: Hex) => Promise<string>;
+    walletSignFn: (message: Uint8Array) => Promise<string>;
 
     constructor(
         url: string, nonce: number,
         sessionPubkey: Uint8Array,
-        walletSignFn: (message: Hex) => Promise<string>,
+        walletSignFn: (message: Uint8Array) => Promise<string>,
         userId: number,
     ) {
         super(url)
@@ -75,9 +74,7 @@ export class CreateSessionAction extends Action {
     }
 
     async send(): Promise<number> {
-        const hash = sha256(this.message);
-        const signature = await this.walletSignFn(hash);
-        assert(signature.length === 64);
+        const signature = await this.walletSignFn(this.message);
         const body = new Uint8Array([...this.message, ...ethers.getBytes(signature.slice(0, -2))]);
         const resp = decodeDelimited(await this.sendMessage(body));
         if (resp.has_err) {
