@@ -17,6 +17,8 @@ import {
     RollmanBlockQueryResponse,
     type SubscriberConfig,
     type Token,
+    type Trades,
+    type User,
 } from "../types";
 import {decodeActionDelimited, MAX_BUFFER_LEN} from "../utils";
 import {
@@ -173,7 +175,7 @@ export class Nord {
 
 export class Subscriber {
     streamURL: string;
-    buffer: DeltaEvent[];
+    buffer: (DeltaEvent | Trades | User)[];
     maxBufferLen: number;
 
     constructor(config: SubscriberConfig) {
@@ -192,7 +194,7 @@ export class Subscriber {
 
         ws.on("message", (rawData) => {
             const message: string = rawData.toLocaleString();
-            const event: DeltaEvent = JSON.parse(message);
+            const event: DeltaEvent | Trades | User = JSON.parse(message);
             if (!this.checkEvent(event)) {
                 return;
             }
@@ -207,7 +209,7 @@ export class Subscriber {
         });
     }
 
-    checkEvent(_event: DeltaEvent): boolean {
+    checkEvent(_event: DeltaEvent | Trades | User): boolean {
         return true;
     }
 }

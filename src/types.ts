@@ -131,6 +131,42 @@ export interface DeltaEvent {
     bids: [number, number];
 }
 
+export interface Trade {
+  side: Side,
+  price: number;
+  size: number;
+  order_id: number;
+}
+
+export interface Trades {
+  last_update_id: number;
+  update_id: number;
+  market_symbol: string;
+  trades: Trade[];
+}
+
+export interface OrderInfo {
+  id: number;
+  reduce_only: boolean;
+  imit_price: number;
+  size: number;
+  user_id: number;
+}
+
+interface HashMap<T> {
+  [key: number]: T
+}
+
+export interface User {
+  last_update_id: number;
+  update_id: number;
+  user_id: number;
+  fills: HashMap<FillMode>;
+  places: HashMap<OrderInfo>;
+  cancels: HashMap<OrderInfo>;
+  balances: HashMap<number>;
+}
+
 /**
  * Query the transactions in the specified L2 block.
  * @field {number} block_number specifies the block number to query.
