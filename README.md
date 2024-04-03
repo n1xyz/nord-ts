@@ -93,3 +93,18 @@ const s = new Subscriber({
 });
 s.subsribe();
 ```
+
+## Development
+
+### Install dependencies
+
+```bash
+yarn
+```
+
+### Generate proto files
+
+````bash
+yarn build
+```
+````
