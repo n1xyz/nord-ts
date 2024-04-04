@@ -25,10 +25,8 @@ export type Actions =
   | proto.nord.Action.PlaceOrder;
 
 export interface NordConfig {
-  nordUrl: string;
   evmUrl: string;
-  prometheusUrl: string;
-  rollmanUrl: string;
+  webServerUrl: string;
   contractAddress: string;
   tokenInfos: ERC20TokenInfo[];
 }

@@ -25,33 +25,25 @@ import {
   DEV_CONTRACT_ADDRESS,
   DEV_TOKEN_INFOS,
   EVM_DEV_URL,
-  NORD_DEV_URL,
-  PROMETHEUS_DEV_URL,
-  ROLLMAN_DEV_URL,
+  WEBSERVER_DEV_URL,
 } from "../const";
 
 export class Nord {
-  nordUrl: string;
   evmUrl: string;
-  prometheusUrl: string;
+  webServerUrl: string;
   contractAddress: string;
-  rollmanUrl: string;
   tokenInfos: ERC20TokenInfo[];
   markets: Market[];
   tokens: Token[];
 
   constructor({
-    nordUrl,
     evmUrl,
-    prometheusUrl,
-    rollmanUrl,
+    webServerUrl,
     tokenInfos,
     contractAddress,
   }: NordConfig) {
-    this.nordUrl = nordUrl;
     this.evmUrl = evmUrl;
-    this.prometheusUrl = prometheusUrl + "/api/v1/query";
-    this.rollmanUrl = rollmanUrl;
+    this.webServerUrl = webServerUrl;
     this.tokenInfos = tokenInfos;
     this.contractAddress = contractAddress;
     this.markets = [];
@@ -59,7 +51,9 @@ export class Nord {
   }
 
   async fetchNordInfo() {
-    const response = await fetch(`${this.nordUrl}/info`, { method: "GET" });
+    const response = await fetch(`${this.webServerUrl}/info`, {
+      method: "GET",
+    });
     const info: Info = await response.json();
     this.markets = info.markets;
     this.tokens = info.tokens;
@@ -74,9 +68,7 @@ export class Nord {
   public static async initDevNord(): Promise<Nord> {
     const nord = new Nord({
       evmUrl: EVM_DEV_URL,
-      nordUrl: NORD_DEV_URL,
-      prometheusUrl: PROMETHEUS_DEV_URL,
-      rollmanUrl: ROLLMAN_DEV_URL,
+      webServerUrl: WEBSERVER_DEV_URL,
       tokenInfos: DEV_TOKEN_INFOS,
       contractAddress: DEV_CONTRACT_ADDRESS,
     });
@@ -144,7 +136,7 @@ export class Nord {
   async blockQueryRollman(
     query: BlockQuery,
   ): Promise<RollmanBlockQueryResponse> {
-    let url = this.rollmanUrl + "/block";
+    let url = this.webServerUrl + "/block_query";
     if (query.block_number != null) {
       url = url + "?block_number=" + query.block_number;
     }
@@ -159,7 +151,7 @@ export class Nord {
   async actionQueryRollman(
     query: ActionQuery,
   ): Promise<RollmanActionQueryResponse> {
-    const url = this.rollmanUrl + "/action?action_id=" + query.action_id;
+    const url = this.webServerUrl + "/tx_query?action_id=" + query.action_id;
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error("Rollman query failed " + url);
@@ -169,7 +161,7 @@ export class Nord {
 
   // Helper to query prometheus.
   async queryPrometheus(params: string): Promise<number> {
-    const url = this.prometheusUrl + "?query=" + params;
+    const url = this.webServerUrl + "/prometheus_query?query=" + params;
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error("Prometheus query failed " + url);

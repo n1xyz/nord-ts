@@ -158,7 +158,7 @@ export class NordUser {
   async refreshSession(sessionPk: Uint8Array): Promise<void> {
     assert(sessionPk.length === 32);
     const message = new CreateSessionAction(
-      this.nord.nordUrl,
+      this.nord.webServerUrl,
       this.getNonce(),
       sessionPk,
       this.walletSignFn,
@@ -205,7 +205,7 @@ export class NordUser {
 
   async withdraw(tokenId: number, amount: number): Promise<void> {
     const message = new WithdrawAction(
-      this.nord.nordUrl,
+      this.nord.webServerUrl,
       this.getNonce(),
       this.sessionSignFn,
       findToken(this.nord.tokens, tokenId).decimals,
@@ -226,7 +226,7 @@ export class NordUser {
     price?: number,
   ): Promise<number> {
     const message = new PlaceOrderAction(
-      this.nord.nordUrl,
+      this.nord.webServerUrl,
       this.getNonce(),
       this.sessionSignFn,
       findMarket(this.nord.markets, marketId).sizeDecimals,
@@ -246,7 +246,7 @@ export class NordUser {
 
   async cancelOrder(marketId: number, orderId: number): Promise<number> {
     const message = new CancelOrderAction(
-      this.nord.nordUrl,
+      this.nord.webServerUrl,
       this.getNonce(),
       this.sessionSignFn,
       this.userId,
