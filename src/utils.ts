@@ -183,3 +183,9 @@ export function printableError(e: any): string {
     return "Unknown error";
   }
 }
+
+
+export function roundToDecimals(num:number, decimals:number) {
+    const factor = Math.pow(10, decimals);
+    return Math.round(num * factor) / factor;
+}

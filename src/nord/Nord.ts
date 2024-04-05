@@ -22,12 +22,12 @@ import {
 } from "../types";
 import { decodeActionDelimited, MAX_BUFFER_LEN } from "../utils";
 import {
-  DEV_CONTRACT_ADDRESS,
-  DEV_TOKEN_INFOS,
-  EVM_DEV_URL,
-  NORD_DEV_URL,
-  PROMETHEUS_DEV_URL,
-  ROLLMAN_DEV_URL,
+    DEV_CONTRACT_ADDRESS,
+    DEV_TOKEN_INFOS,
+    EVM_DEV_URL, EVM_TESTNET_URL,
+    NORD_DEV_URL, NORD_TESTNET_URL,
+    PROMETHEUS_DEV_URL, PROMETHEUS_TESTNET_URL,
+    ROLLMAN_DEV_URL, ROLLMAN_TESTNET_URL, TESTNET_CONTRACT_ADDRESS, TESTNET_TOKEN_INFOS,
 } from "../const";
 
 export class Nord {
@@ -79,6 +79,19 @@ export class Nord {
       rollmanUrl: ROLLMAN_DEV_URL,
       tokenInfos: DEV_TOKEN_INFOS,
       contractAddress: DEV_CONTRACT_ADDRESS,
+    });
+    await nord.fetchNordInfo();
+    return nord;
+  }
+
+  public static async initTestnetNord(): Promise<Nord> {
+    const nord = new Nord({
+      evmUrl: EVM_TESTNET_URL,
+      nordUrl: NORD_TESTNET_URL,
+      prometheusUrl: PROMETHEUS_TESTNET_URL,
+      rollmanUrl: ROLLMAN_TESTNET_URL,
+      tokenInfos: TESTNET_TOKEN_INFOS,
+      contractAddress: TESTNET_CONTRACT_ADDRESS,
     });
     await nord.fetchNordInfo();
     return nord;

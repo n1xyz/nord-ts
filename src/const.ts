@@ -19,16 +19,39 @@ export const DEBUG_KEYS = [
   "0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6",
 ];
 
-export const DEV_URL = "http://localhost";
+export const DEV_URL = "http://127.0.0.1";
+export const DEV_EVM_URL = "http://127.0.0.1";
 export const NORD_DEV_URL = DEV_URL + ":" + NORD_PORT;
-export const EVM_DEV_URL = DEV_URL + ":" + EVM_PORT;
+export const EVM_DEV_URL = DEV_EVM_URL + ":" + EVM_PORT;
 export const ROLLMAN_DEV_URL = DEV_URL + ":" + ROLLMAN_PORT;
 export const PROMETHEUS_DEV_URL = DEV_URL + ":" + PROMETHEUS_PORT;
+
+
 export const DEV_CONTRACT_ADDRESS =
-  "0x8a791620dd6260079bf849dc5567adc3f2fdc318";
+    "0x8a791620dd6260079bf849dc5567adc3f2fdc318";
 export const DEV_TOKEN_INFOS: ERC20TokenInfo[] = [
+    {
+        address: "0x9a9f2ccfde556a7e9ff0848998aa4a0cfd8863ae",
+        precision: 6,
+        tokenId: 0,
+        name: "usdc",
+    },
+];
+
+
+export const TESTNET_URL = "http://lmx.layern.network";
+export const TESTNET_EVM_URL = "https://rpc.tenderly.co/fork/1143e2fd-db3a-49d6-9326-476f17596e52";
+export const NORD_TESTNET_URL = TESTNET_URL;
+export const EVM_TESTNET_URL = TESTNET_EVM_URL;
+export const ROLLMAN_TESTNET_URL = TESTNET_URL + ":" + ROLLMAN_PORT;
+export const PROMETHEUS_TESTNET_URL = TESTNET_URL + ":" + PROMETHEUS_PORT;
+
+
+export const TESTNET_CONTRACT_ADDRESS =
+  "0x1617016e391Ed435cc38286cB9A7fd1Ca643e362";
+export const TESTNET_TOKEN_INFOS: ERC20TokenInfo[] = [
   {
-    address: "0x9a9f2ccfde556a7e9ff0848998aa4a0cfd8863ae",
+    address: "0xfcd861510f6421a759ad8c8fc2bb9ac3c63e850c",
     precision: 6,
     tokenId: 0,
     name: "usdc",
