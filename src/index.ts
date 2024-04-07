@@ -3,3 +3,5 @@ export * from "./utils";
 export * from "./abis";
 export * from "./nord";
 export * from "./const";
+
+console.log(undefined)

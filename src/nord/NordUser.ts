@@ -1,11 +1,15 @@
 import {BrowserProvider, ethers, SigningKey} from "ethers";
 import secp256k1 from "secp256k1";
-import {DEFAULT_FUNDING_AMOUNTS, DEV_CONTRACT_ADDRESS, FAUCET_PRIVATE_ADDRESS,} from "../const";
+import {
+    DEFAULT_FUNDING_AMOUNTS,
+    CONTRACT_ADDRESS,
+    FAUCET_PRIVATE_ADDRESS,
+} from "../const";
 import {assert, findMarket, findToken, roundToDecimals} from "../utils";
-import {ERC20_ABI} from "../abis/ERC20_ABI";
+import {ERC20_ABI} from "../abis";
 import {CancelOrderAction, CreateSessionAction, PlaceOrderAction, WithdrawAction,} from "./actions";
-import {NORD_RAMP_FACET_ABI} from "../abis/NORD_RAMP_FACET_ABI";
-import {FillMode, Order, Side} from "../types";
+import {NORD_RAMP_FACET_ABI} from "../abis";
+import {FillMode, NordDeployment, Order, Side} from "../types";
 import {Nord} from "./Nord";
 
 export class NordUser {
@@ -108,6 +112,15 @@ export class NordUser {
         }
     }
 
+    async getEthBalance(){
+        const provider = new ethers.JsonRpcProvider(this.nord.evmUrl);
+        return Number(
+            ethers.formatUnits(
+                await provider.getBalance(this.address)
+            )
+        )
+    }
+
     async setPublicKey() {
         const message = "Layer N - Nord";
         const msgHash = ethers.hashMessage(message);
@@ -121,7 +134,7 @@ export class NordUser {
         this.publicKey = secp256k1.publicKeyConvert(publicKeyBuffer, true);
     }
 
-    async fundWallet() {
+    async fundEthWallet() {
         const provider = new ethers.JsonRpcProvider(this.nord.evmUrl);
         const wallet = new ethers.Wallet(FAUCET_PRIVATE_ADDRESS, provider);
         assert(DEFAULT_FUNDING_AMOUNTS["ETH"] != null);
@@ -130,19 +143,25 @@ export class NordUser {
             value: ethers.parseEther(DEFAULT_FUNDING_AMOUNTS["ETH"][0]),
         });
         await ethTx.wait();
+    }
+
+    async fundErc20Wallet() {
+        const provider = new ethers.JsonRpcProvider(this.nord.evmUrl);
+        const wallet = new ethers.Wallet(FAUCET_PRIVATE_ADDRESS, provider);
+        assert(DEFAULT_FUNDING_AMOUNTS["ETH"] != null);
         for (const tokenInfo of this.nord.tokenInfos) {
             const erc20Contract = new ethers.Contract(
                 tokenInfo.address,
                 ERC20_ABI,
                 wallet,
             );
-            const defaultFundingAmount = DEFAULT_FUNDING_AMOUNTS[tokenInfo.address];
+            const defaultFundingAmount =  DEFAULT_FUNDING_AMOUNTS[tokenInfo.address];
             const tokenTx = await erc20Contract.transfer(
                 this.address,
                 ethers.parseUnits(defaultFundingAmount[0], defaultFundingAmount[1]),
                 {gasLimit: 1000000},
             );
-            tokenTx.wait();
+            await tokenTx.wait();
         }
     }
 
@@ -170,14 +189,14 @@ export class NordUser {
             await provider.getSigner(),
         );
         const approveTx = await erc20Contract.approve(
-            DEV_CONTRACT_ADDRESS,
+            CONTRACT_ADDRESS,
             ethers.parseUnits(amount.toString(), erc20.precision),
             {gasLimit: 1000000},
         );
         await approveTx.wait();
 
         const nordContract = new ethers.Contract(
-            DEV_CONTRACT_ADDRESS,
+            CONTRACT_ADDRESS,
             NORD_RAMP_FACET_ABI,
             await provider.getSigner(),
         );
@@ -198,7 +217,7 @@ export class NordUser {
         if (tokenId || tokenId == 0) {
 
             const nordContract = new ethers.Contract(
-                DEV_CONTRACT_ADDRESS,
+                CONTRACT_ADDRESS,
                 NORD_RAMP_FACET_ABI,
                 await provider.getSigner(),
             );
@@ -236,7 +255,7 @@ export class NordUser {
         size: number,
         price?: number,
     ): Promise<number> {
-        let market = findMarket(this.nord.markets, marketId);
+        const market = findMarket(this.nord.markets, marketId);
         const message = new PlaceOrderAction(
             this.nord.nordUrl,
             this.getNonce(),
@@ -249,8 +268,8 @@ export class NordUser {
             side,
             fillMode,
             isReduceOnly,
-            roundToDecimals(size,market.priceDecimals),
-            price&&roundToDecimals(price,market.priceDecimals),
+            roundToDecimals(size, market.priceDecimals),
+            price && roundToDecimals(price, market.priceDecimals),
         );
 
         return await message.send();
