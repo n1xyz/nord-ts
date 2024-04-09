@@ -204,7 +204,6 @@ export class PlaceOrderAction extends Action {
         size: number,
         price?: number,
     ) {
-        console.log(size,price,toShiftedNumber(price ?? 0, priceDecimals))
         super(url);
         this.signFn = signFn;
         this.message = PlaceOrderAction.getPayload({

@@ -127,18 +127,17 @@ export class NordUser {
         );
         const publicKeyBuffer = Buffer.from(recoveredPubKey.slice(2), "hex");
         this.publicKey = secp256k1.publicKeyConvert(publicKeyBuffer, true);
+        console.log(ethers.hexlify(this.publicKey))
     }
 
     async fundEthWallet() {
         const provider = new ethers.JsonRpcProvider(this.nord.evmUrl);
         const wallet = new ethers.Wallet(FAUCET_PRIVATE_ADDRESS, provider);
         assert(DEFAULT_FUNDING_AMOUNTS["ETH"] != null);
-        console.log(await provider.getBalance(wallet.address));
         const ethTx = await wallet.sendTransaction({
             to: this.address,
             value: ethers.parseEther(DEFAULT_FUNDING_AMOUNTS["ETH"][0]),
         });
-        console.log("hmmm")
         await ethTx.wait();
     }
 
@@ -153,7 +152,6 @@ export class NordUser {
                 wallet,
             );
             if( DEFAULT_FUNDING_AMOUNTS[tokenInfo.address]) {
-                console.log(await erc20Contract.balanceOf(wallet.address),wallet.address)
                 const defaultFundingAmount = DEFAULT_FUNDING_AMOUNTS[tokenInfo.address];
                 const tokenTx = await erc20Contract.transfer(
                     this.address,
@@ -200,10 +198,6 @@ export class NordUser {
             NORD_RAMP_FACET_ABI,
             await provider.getSigner(),
         );
-        console.log("hiya",this.publicKey,
-            BigInt(0),
-            ethers.parseUnits(amount.toString(), erc20.precision),
-            {gasLimit: 1000000},)
         const depositTx = await nordContract.depositUnchecked(
             this.publicKey,
             BigInt(0),

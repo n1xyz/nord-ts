@@ -227,15 +227,12 @@ export class Subscriber {
         const ws = new WebSocket(this.streamURL);
 
         ws.on("open", () => {
-            console.log(`Connected to ${this.streamURL}`);
+
         });
 
         ws.on("message", (rawData) => {
             const message: string = rawData.toLocaleString();
             const event: DeltaEvent | Trades | User = JSON.parse(message);
-            if (!this.checkEvent(event)) {
-                return;
-            }
             this.buffer.push(event);
             if (this.buffer.length > this.maxBufferLen) {
                 this.buffer.shift();
@@ -243,13 +240,7 @@ export class Subscriber {
         });
 
         ws.on("close", () => {
-            console.log(`Disconnected from ${this.streamURL}`);
         });
-    }
-
-    checkEvent(_: DeltaEvent | Trades | User): boolean {
-        console.log(_);
-        return true;
     }
 }
 

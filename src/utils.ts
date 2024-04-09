@@ -187,6 +187,5 @@ export function printableError(e: any): string {
 
 export function roundToDecimals(num:number, decimals:number) {
     const factor = Math.pow(10, decimals);
-    console.log(num,decimals,'zebra',Math.round(num * factor) / factor)
     return Math.round(num * factor) / factor;
 }
