@@ -115,6 +115,8 @@ export interface SubscriberConfig {
 
 export interface Market {
     symbol: string;
+    baseTokenId: number;
+    quoteTokenId: number;
     priceDecimals: number;
     sizeDecimals: number;
 }

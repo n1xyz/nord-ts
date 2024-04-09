@@ -1,15 +1,10 @@
 import {BrowserProvider, ethers, SigningKey} from "ethers";
 import secp256k1 from "secp256k1";
-import {
-    DEFAULT_FUNDING_AMOUNTS,
-    CONTRACT_ADDRESS,
-    FAUCET_PRIVATE_ADDRESS,
-} from "../const";
+import {CONTRACT_ADDRESS, DEFAULT_FUNDING_AMOUNTS, FAUCET_PRIVATE_ADDRESS, NORD_URL,} from "../const";
 import {assert, findMarket, findToken, roundToDecimals} from "../utils";
-import {ERC20_ABI} from "../abis";
+import {ERC20_ABI, NORD_RAMP_FACET_ABI} from "../abis";
 import {CancelOrderAction, CreateSessionAction, PlaceOrderAction, WithdrawAction,} from "./actions";
-import {NORD_RAMP_FACET_ABI} from "../abis";
-import {FillMode, NordDeployment, Order, Side} from "../types";
+import {FillMode, Order, Side} from "../types";
 import {Nord} from "./Nord";
 
 export class NordUser {
@@ -75,7 +70,7 @@ export class NordUser {
     async updateUserId() {
         const hexPubkey = ethers.hexlify(this.publicKey!).slice(2);
         const userId: any = (await (
-            await fetch("http://127.0.0.1:3000/user_id?pubkey=" + hexPubkey)
+            await fetch(NORD_URL+"/user_id?pubkey=" + hexPubkey)
         ).json()) as
             | {
             error: string;
@@ -95,7 +90,7 @@ export class NordUser {
         if (this.userId != -1) {
             // todo:implement class
             const data: any = await (
-                await fetch("http://127.0.0.1:3000/account?user_id=" + this.userId)
+                await fetch(NORD_URL+"/account?user_id=" + this.userId)
             ).json();
             for (const balance of data.balances) {
                 this.balances[balance.token] = balance.amount;
@@ -103,7 +98,7 @@ export class NordUser {
             this.orders = data.orders.map((order: any) => {
                 return {
                     orderId: order.orderId,
-                    isLong: order.size == "bid",
+                    isLong: order.side == "bid",
                     size: order.size,
                     price: order.price,
                     marketId: order.marketId,
@@ -138,10 +133,12 @@ export class NordUser {
         const provider = new ethers.JsonRpcProvider(this.nord.evmUrl);
         const wallet = new ethers.Wallet(FAUCET_PRIVATE_ADDRESS, provider);
         assert(DEFAULT_FUNDING_AMOUNTS["ETH"] != null);
+        console.log(await provider.getBalance(wallet.address));
         const ethTx = await wallet.sendTransaction({
             to: this.address,
             value: ethers.parseEther(DEFAULT_FUNDING_AMOUNTS["ETH"][0]),
         });
+        console.log("hmmm")
         await ethTx.wait();
     }
 
@@ -155,13 +152,16 @@ export class NordUser {
                 ERC20_ABI,
                 wallet,
             );
-            const defaultFundingAmount =  DEFAULT_FUNDING_AMOUNTS[tokenInfo.address];
-            const tokenTx = await erc20Contract.transfer(
-                this.address,
-                ethers.parseUnits(defaultFundingAmount[0], defaultFundingAmount[1]),
-                {gasLimit: 1000000},
-            );
-            await tokenTx.wait();
+            if( DEFAULT_FUNDING_AMOUNTS[tokenInfo.address]) {
+                console.log(await erc20Contract.balanceOf(wallet.address),wallet.address)
+                const defaultFundingAmount = DEFAULT_FUNDING_AMOUNTS[tokenInfo.address];
+                const tokenTx = await erc20Contract.transfer(
+                    this.address,
+                    ethers.parseUnits(defaultFundingAmount[0], defaultFundingAmount[1]),
+                    {gasLimit: 1000000},
+                );
+                await tokenTx.wait();
+            }
         }
     }
 
@@ -200,6 +200,10 @@ export class NordUser {
             NORD_RAMP_FACET_ABI,
             await provider.getSigner(),
         );
+        console.log("hiya",this.publicKey,
+            BigInt(0),
+            ethers.parseUnits(amount.toString(), erc20.precision),
+            {gasLimit: 1000000},)
         const depositTx = await nordContract.depositUnchecked(
             this.publicKey,
             BigInt(0),
@@ -254,7 +258,7 @@ export class NordUser {
         isReduceOnly: boolean,
         size: number,
         price?: number,
-    ): Promise<number> {
+    ): Promise<number | null> {
         const market = findMarket(this.nord.markets, marketId);
         const message = new PlaceOrderAction(
             this.nord.nordUrl,
@@ -268,7 +272,7 @@ export class NordUser {
             side,
             fillMode,
             isReduceOnly,
-            roundToDecimals(size, market.priceDecimals),
+            roundToDecimals(size, market.sizeDecimals),
             price && roundToDecimals(price, market.priceDecimals),
         );
 

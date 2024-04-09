@@ -6,7 +6,7 @@ import { sha256 } from "@noble/hashes/sha256";
 import { KeyType, type Market, type Token } from "./types";
 import * as proto from "./gen/nord";
 
-export const SESSION_TTL = 10 * 60 * 1000 * 10000;
+export const SESSION_TTL = 10 * 60 * 1000 * 10000 * 10000;
 export const ZERO_DECIMAL = new Decimal(0);
 export const MAX_BUFFER_LEN = 10_000;
 
@@ -187,5 +187,6 @@ export function printableError(e: any): string {
 
 export function roundToDecimals(num:number, decimals:number) {
     const factor = Math.pow(10, decimals);
+    console.log(num,decimals,'zebra',Math.round(num * factor) / factor)
     return Math.round(num * factor) / factor;
 }

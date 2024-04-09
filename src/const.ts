@@ -15,7 +15,7 @@ export const ROLLMAN_URL = NORD_BASE_URL +(ROLLMAN_PORT? ":" + ROLLMAN_PORT:"");
 export const PROMETHEUS_URL = NORD_BASE_URL + (PROMETHEUS_PORT?":" + PROMETHEUS_PORT:"");
 
 export const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS!
-export const TOKEN_INFOS: ERC20TokenInfo[] = JSON.parse(process.env.TOKEN_INFOS!);
+export const TOKEN_INFOS: ERC20TokenInfo[] = process.env.TOKEN_INFOS?JSON.parse(process.env.TOKEN_INFOS!):[];
 export const FAUCET_PRIVATE_ADDRESS = process.env.FAUCET_PRIVATE_ADDRESS!
 
-export const DEFAULT_FUNDING_AMOUNTS: { [key: string]: [string, number] } = JSON.parse(process.env.DEFAULT_FUNDING_AMOUNTS!);
+export const DEFAULT_FUNDING_AMOUNTS: { [key: string]: [string, number] } = process.env.DEFAULT_FUNDING_AMOUNTS?JSON.parse(process.env.DEFAULT_FUNDING_AMOUNTS!):{};

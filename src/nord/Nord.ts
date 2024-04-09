@@ -55,11 +55,26 @@ export class Nord {
         this.tokens = [];
     }
 
+    getTokenIdBySymbol(symbol: string): number {
+        for (let i = 0; i < this.tokens.length; i++) {
+            if(symbol==this.tokens[i].symbol){
+                return i
+            }
+        }
+        throw new Error("Could not find the token!")
+    }
+
     async fetchNordInfo() {
         const response = await fetch(`${this.nordUrl}/info`, {method: "GET"});
         const info: Info = await response.json();
-        this.markets = info.markets;
         this.tokens = info.tokens;
+        this.markets = info.markets.map(market=> {
+            return {
+                ...market,
+                baseTokenId:this.getTokenIdBySymbol(market.symbol.split("USDC")[0]),
+                quoteTokenId:0,
+            }
+        });
     }
 
     public static async initNord(nordConfig: NordConfig): Promise<Nord> {
@@ -86,6 +101,25 @@ export class Nord {
     async queryBlock(query: BlockQuery): Promise<BlockQueryResponse> {
         const rollmanResponse: RollmanBlockQueryResponse =
             await this.blockQueryRollman(query);
+        const queryResponse: BlockQueryResponse = {
+            block_number: rollmanResponse.block_number,
+            actions: [],
+        };
+
+        for (const rollmanAction of rollmanResponse.actions) {
+            const blockAction: ActionInfo = {
+                action_id: rollmanAction.action_id,
+                action: decodeActionDelimited(rollmanAction.action_pb),
+            };
+            queryResponse.actions.push(blockAction);
+        }
+        return queryResponse;
+    }
+
+    // Query the block info from rollman.
+    async queryLastNBlocks(): Promise<BlockQueryResponse> {
+        const rollmanResponse: RollmanBlockQueryResponse =
+            await this.blockQueryRollman({});
         const queryResponse: BlockQueryResponse = {
             block_number: rollmanResponse.block_number,
             actions: [],
@@ -218,3 +252,5 @@ export class Subscriber {
         return true;
     }
 }
+
+
