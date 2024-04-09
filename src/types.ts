@@ -179,9 +179,19 @@ export interface BlockQuery {
  * @field {number} block_number specifies the block number being returned.
  * @field {BlockActions} actions are the list of transactions from the block.
  */
-export interface BlockQueryResponse {
+export interface BlockResponse {
   block_number: number;
   actions: ActionInfo[];
+}
+
+/**
+ * Response for BlockSummaryQuery.
+ * @field {BlockSummary} block_summary is the summary of upto the last N blocks.
+ *                       The server can return fewer than last_n block summary if
+ *                       fewer blocks are available or if it exceeds a max cap.
+ */
+export interface BlockSummaryResponse {
+  block_summary: BlockSummary[];
 }
 
 /**
@@ -197,11 +207,42 @@ export interface ActionQuery {
  * @field {number} block_number the block the action is part of.
  *                 If the action is not yet included in any block,
  *                 null is returned.
- * @field {Action} action in protobuf format.
+ * @field {Action} the transaction.
  */
-export interface ActionQueryResponse {
+export interface ActionResponse {
   block_number?: number;
   action: proto.nord.Action;
+}
+
+/**
+ * Query the recent actions
+ * @field {number} last_n requests last N actions.
+ * @field {number} action_id specifies the action to query.
+ */
+export interface ActionsQuery {
+  last_n: number;
+}
+
+/**
+ * Response for ActionsQuery.
+ * @field {ActionsExtendedInfo} actions returns upto the last N actions.
+ *                       The server can return fewer than last_n actions if
+ *                       fewer actions are available or if it exceeds a max cap.
+ */
+export interface ActionsResponse {
+  actions: ActionsExtendedInfo[];
+}
+
+/**
+ * Block summary.
+ * @field {number} block_number Block number.
+ * @field {Action} from First action_id in the block.
+ * @field {Action} to Last action_id in the block.
+ */
+export interface BlockSummary {
+  block_number: number;
+  from_action_id: number;
+  to_action_id: number;
 }
 
 /**
@@ -210,6 +251,20 @@ export interface ActionQueryResponse {
  * @field {Action} action in protobuf format.
  */
 export interface ActionInfo {
+  action_id: number;
+  action: proto.nord.Action;
+}
+
+/**
+ * Extended info about the block transaction.
+ * @field {number} block_number the block the action is part of.
+ *                 If the action is not yet included in any block,
+ *                 null is returned.
+ * @field {number} action_id of the action.
+ * @field {Action} action the transaction.
+ */
+export interface ActionsExtendedInfo {
+  block_number?: number;
   action_id: number;
   action: proto.nord.Action;
 }
@@ -230,18 +285,28 @@ export interface AggregateMetrics {
   request_latency_average: number;
 }
 
-// The formats returned by rollman.
-export interface RollmanBlockQueryResponse {
+// The JSON types returned by rollman, that need to be translated to TS format.
+export interface RollmanBlockResponse {
   block_number: number;
   actions: RollmanActionInfo[];
 }
 
-export interface RollmanActionQueryResponse {
+export interface RollmanActionResponse {
   block_number?: number;
   action_pb: Uint8Array;
 }
 
+export interface RollmanActionsResponse {
+  actions: RollmanActionExtendedInfo[];
+}
+
 export interface RollmanActionInfo {
+  action_id: number;
+  action_pb: Uint8Array;
+}
+
+export interface RollmanActionExtendedInfo {
+  block_number?: number;
   action_id: number;
   action_pb: Uint8Array;
 }

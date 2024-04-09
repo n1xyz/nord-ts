@@ -2,19 +2,23 @@ import fetch from "node-fetch";
 import WebSocket from "ws";
 import {
   ActionInfo,
+  ActionsExtendedInfo,
   ActionQuery,
-  ActionQueryResponse,
+  ActionResponse,
+  ActionsResponse,
   AggregateMetrics,
   BlockQuery,
-  BlockQueryResponse,
+  BlockResponse,
+  BlockSummaryResponse,
   type DeltaEvent,
   ERC20TokenInfo,
   type Info,
   type Market,
   NordConfig,
   PeakTpsPeriodUnit,
-  RollmanActionQueryResponse,
-  RollmanBlockQueryResponse,
+  RollmanActionResponse,
+  RollmanActionsResponse,
+  RollmanBlockResponse,
   type SubscriberConfig,
   type Token,
   type Trades,
@@ -77,10 +81,10 @@ export class Nord {
   }
 
   // Query the block info from rollman.
-  async queryBlock(query: BlockQuery): Promise<BlockQueryResponse> {
-    const rollmanResponse: RollmanBlockQueryResponse =
+  async queryBlock(query: BlockQuery): Promise<BlockResponse> {
+    const rollmanResponse: RollmanBlockResponse =
       await this.blockQueryRollman(query);
-    const queryResponse: BlockQueryResponse = {
+    const queryResponse: BlockResponse = {
       block_number: rollmanResponse.block_number,
       actions: [],
     };
@@ -95,14 +99,40 @@ export class Nord {
     return queryResponse;
   }
 
+  // Query the block summary of recent blocks from rollman.
+  async queryRecentBlocks(last_n: number): Promise<BlockSummaryResponse> {
+    const response: BlockSummaryResponse =
+      await this.blockSummaryQueryRollman(last_n);
+    return response;
+  }
+
   // Query the action info from rollman.
-  async queryAction(query: ActionQuery): Promise<ActionQueryResponse> {
-    const rollmanResponse: RollmanActionQueryResponse =
+  async queryAction(query: ActionQuery): Promise<ActionResponse> {
+    const rollmanResponse: RollmanActionResponse =
       await this.actionQueryRollman(query);
     return {
       block_number: rollmanResponse.block_number,
       action: decodeActionDelimited(rollmanResponse.action_pb),
     };
+  }
+
+  // Query the recent transactions from rollman.
+  async queryRecentActions(last_n: number): Promise<ActionsResponse> {
+    const rollmanResponse: RollmanActionsResponse =
+      await this.actionsQueryRollman(last_n);
+
+    const queryResponse: ActionsResponse = {
+      actions: [],
+    };
+    for (const rollmanExtendedAction of rollmanResponse.actions) {
+      const extendedActionInfo: ActionsExtendedInfo = {
+        block_number: rollmanExtendedAction.block_number,
+        action_id: rollmanExtendedAction.action_id,
+        action: decodeActionDelimited(rollmanExtendedAction.action_pb),
+      };
+      queryResponse.actions.push(extendedActionInfo);
+    }
+    return queryResponse;
   }
 
   // Query the aggregate metrics across nord and rollman.
@@ -112,7 +142,7 @@ export class Nord {
   ): Promise<AggregateMetrics> {
     // Get the latest block number for L2 blocks.
     const blockQuery: BlockQuery = {};
-    const rollmanResponse: RollmanBlockQueryResponse =
+    const rollmanResponse: RollmanBlockResponse =
       await this.blockQueryRollman(blockQuery);
     const period = txPeakTpsPeriod.toString() + txPeakTpsPeriodUnit;
     const query = `max_over_time(rate(nord_requests_count[1m])[${period}:1m])`;
@@ -133,9 +163,7 @@ export class Nord {
   }
 
   // Helper to query rollman for block info.
-  async blockQueryRollman(
-    query: BlockQuery,
-  ): Promise<RollmanBlockQueryResponse> {
+  async blockQueryRollman(query: BlockQuery): Promise<RollmanBlockResponse> {
     let url = this.webServerUrl + "/block_query";
     if (query.block_number != null) {
       url = url + "?block_number=" + query.block_number;
@@ -147,11 +175,31 @@ export class Nord {
     return await response.json();
   }
 
+  // Helper to query rollman for recent block summary.
+  async blockSummaryQueryRollman(
+    last_n: number,
+  ): Promise<BlockSummaryResponse> {
+    const url = this.webServerUrl + "/last_n_blocks?last_n=" + last_n;
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error("Rollman query failed " + url);
+    }
+    return await response.json();
+  }
+
   // Helper to query rollman for action info.
-  async actionQueryRollman(
-    query: ActionQuery,
-  ): Promise<RollmanActionQueryResponse> {
+  async actionQueryRollman(query: ActionQuery): Promise<RollmanActionResponse> {
     const url = this.webServerUrl + "/tx_query?action_id=" + query.action_id;
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error("Rollman query failed " + url);
+    }
+    return await response.json();
+  }
+
+  // Helper to query rollman for recent actions.
+  async actionsQueryRollman(last_n: number): Promise<RollmanActionsResponse> {
+    const url = this.webServerUrl + "/last_n_actions?last_n=" + last_n;
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error("Rollman query failed " + url);
