@@ -79,36 +79,59 @@ export class NordUser {
 
   async updateUserId() {
     const hexPubkey = ethers.hexlify(this.publicKey!).slice(2);
-    const userId: any = (await (
+    const userId = await (
       await fetch("http://localhost:3000/user_id?pubkey=" + hexPubkey)
-    ).json()) as
-      | {
-          error: string;
-        }
-      | number;
-    if (isNaN(userId)) {
-      if (userId.error == "INTERNAL_SERVER_ERROR") {
-        this.userId = -1;
-        return;
+    ).json();
+    if (typeof userId !== "number") {
+      this.userId = -1;
+      if (typeof userId === "object" && userId !== null && "error" in userId) {
+        throw new Error(`Could not fetch user id: ${userId.error ?? null}`);
+      } else {
+        throw new Error(`Unknown error: ${userId}`);
       }
-      throw new Error("Could not fetch user id!");
     }
-    this.userId = userId as number;
+    this.userId = userId;
   }
 
   async fetchInfo() {
+    interface FetchOrder {
+      orderId: number;
+      size: number;
+      price: number;
+      marketId: number;
+      side: "ask" | "bid";
+    }
+
+    interface Balance {
+      tokenId: number;
+      token: string;
+      amount: number;
+    }
+
+    interface Account {
+      orders: FetchOrder[];
+      balances: Balance[];
+    }
+
     if (this.userId != -1) {
       // todo:implement class
-      const data: any = await (
+      const data_ = await (
         await fetch("http://localhost:3000/account?user_id=" + this.userId)
       ).json();
+      if (typeof data_ !== "object" || data_ === null) {
+        throw new Error(`Unknown data returned: ${data_}`);
+      }
+      if ("error" in data_) {
+        throw new Error(`Failed to fetch user info: ${data_.error}`);
+      }
+      const data = data_ as Account;
       for (const balance of data.balances) {
         this.balances[balance.token] = balance.amount;
       }
-      this.orders = data.orders.map((order: any) => {
+      this.orders = data.orders.map((order) => {
         return {
           orderId: order.orderId,
-          isLong: order.size == "bid",
+          isLong: order.side === "bid",
           size: order.size,
           price: order.price,
           marketId: order.marketId,

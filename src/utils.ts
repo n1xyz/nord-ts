@@ -175,11 +175,11 @@ export function findToken(tokens: Token[], tokenId: number): Token {
   return tokens[tokenId];
 }
 
-export function printableError(e: any): string {
+export function printableError(e: unknown): string {
   if (Number.isInteger(e)) {
-    return proto.nord.Error[e];
+    return proto.nord.Error[e as number];
   } else {
     // DUPLICATE
-    return "Unknown error";
+    return `Unknown error: ${e}`;
   }
 }

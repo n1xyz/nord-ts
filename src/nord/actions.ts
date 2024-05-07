@@ -34,19 +34,15 @@ export class Action {
    * @returns Response data in Uint8Array.
    */
   protected async sendMessage(payload: Uint8Array): Promise<Uint8Array> {
-    try {
-      const response = await fetch(this.nordActionUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: payload,
-      });
-      const buffer = await response.arrayBuffer();
-      return new Uint8Array(buffer);
-    } catch (e: any) {
-      return e;
-    }
+    const response = await fetch(this.nordActionUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: payload,
+    });
+    const buffer = await response.arrayBuffer();
+    return new Uint8Array(buffer);
   }
 }
 

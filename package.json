@@ -12,7 +12,8 @@
     "build": "npm run build:proto && tsc && npm run docs",
     "clean": "rm -rf ./src/gen && rm -rf docs",
     "lint": "yarn eslint --fix --ext .ts --ext .js src",
-    "fmt": "yarn prettier --write src"
+    "fmt": "yarn prettier --write src",
+    "ci": "yarn run lint && yarn run prettier --check src"
   },
   "repository": {
     "type": "git",
