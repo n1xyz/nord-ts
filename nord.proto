@@ -5,6 +5,13 @@
 syntax = "proto3";
 
 package nord;
+// Emulation of 128-bit integers since Protobuf doesn't have native support
+message U128 {
+  // Low 64-bit word
+  uint64 lo = 1;
+  // High 64-bit word
+  uint64 hi = 2;
+}
 
 enum Side {
   ASK = 0;
@@ -73,8 +80,8 @@ enum Error {
   UNINITIALIZED_PRICES = 98; // TODO(deprecate)
   PYTH_FEED_PRICE_OUT_OF_RANGE = 99;
   INVALID_PARAMETERS = 100;
-  // Order's fill mode requires price to be specified
-  ORDER_MISSING_PRICE = 101;
+  // Order requires some of its limits specified according to fill mode
+  ORDER_MISSING_LIMITS = 101;
   Dropped = 999;
 }
 
@@ -118,11 +125,25 @@ message Action {
     Side side = 3;
     FillMode fill_mode = 4;
     bool is_reduce_only = 5;
-    // Shifted by the market's tick_decimals. If 0, is
-    // interpreted as `null`, i.e. a market order.
+    // Raw integral value of order limit price.
+    // `1` here equals to market's `10^-price_decimals`
+    // When used in token balances and reward computations, shifted by market's `price_decimals`.
+    // Optional, treated as not set if 0.
     uint64 price = 6;
-    // Shifted by the market's decimals. Must be non-zero.
+    // Raw integral value of order size limit.
+    // `1` here equals to market's `10^-size_decimals`
+    // When used in token balances and reward computations, shifted by market's `size_decimals`.
+    // Optional, treated as not set if 0.
     uint64 size = 7;
+    // Raw integral value of order quote size limit.
+    // `1` here equals to market's `10^-(size_decimals + price_decimals)`
+    // When used in token balances and reward computations, shifted by market's `size_decimals + price_decimals`.
+    // Optional, treated as not set if 0.
+    //
+    // NB: Requires 128-bit value because it can be seen as sum
+    // of order sizes multiplied by respective prices. Since size is up to 48 bits and price is up to 64 bits,
+    // their product can easily exceed 64 bits.
+    U128 quote_size = 8;
   }
 
   message CancelOrderById {
