@@ -63,6 +63,7 @@ enum Error {
   INSUFFICIENT_BALANCE = 10;
   ARITHMETIC_OVERFLOW = 11;
   RISK_TOO_HIGH = 12;
+  // generic error for order execution
   ORDER_EXECUTION = 13;
   INVALID_ORDER_OWNER = 14;
   KEY_ALREADY_REGISTERED = 15;
@@ -82,6 +83,10 @@ enum Error {
   INVALID_PARAMETERS = 100;
   // Order requires some of its limits specified according to fill mode
   ORDER_MISSING_LIMITS = 101;
+  ORDER_MISSING_PRICE = 102;
+  INDEX_PRICE_OUT_OF_RANGE = 103;
+  INDEX_DECIMALS_OUT_OF_RANGE = 104;
+  INVALID_STATE_VERSION = 105;
   Dropped = 999;
 }
 
