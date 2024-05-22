@@ -1,4 +1,4 @@
-import { BrowserProvider, ethers, SigningKey } from "ethers";
+import { BrowserProvider, ethers, SigningKey, MaxUint256 } from "ethers";
 import secp256k1 from "secp256k1";
 import {
   DEFAULT_FUNDING_AMOUNTS,
@@ -181,7 +181,7 @@ export class NordUser {
       );
       const approveTx = await erc20Contract.approve(
         DEV_CONTRACT_ADDRESS,
-        ethers.constants.MaxUint256,
+        MaxUint256,
         { gasLimit: 1000000 },
       );
       await approveTx.wait();
