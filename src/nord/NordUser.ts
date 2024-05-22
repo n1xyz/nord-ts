@@ -181,7 +181,7 @@ export class NordUser {
       );
       const approveTx = await erc20Contract.approve(
         DEV_CONTRACT_ADDRESS,
-        ethers.parseUnits(amount.toString(), erc20.precision),
+        ethers.constants.MaxUint256,
         { gasLimit: 1000000 },
       );
       await approveTx.wait();
