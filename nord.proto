@@ -189,6 +189,11 @@ message Action {
     bytes raw_pythnet_data = 1;
   }
 
+  message Liquidate {
+    uint64 market_id = 1;
+    uint64 user_id = 2;
+  }
+
   // Must be within 60s of the engine's current logical time, which
   // should be within a few seconds of real time.
   //
@@ -211,6 +216,7 @@ message Action {
     PythSetWormholeGuardians pyth_set_wormhole_guardians = 11;
     PythSetSymbolFeed pyth_set_symbol_feed = 12;
     PythPriceFeedUpdate pyth_price_feed_update = 13;
+    Liquidate liquidate = 14;
   }
 }
 
@@ -282,6 +288,10 @@ message Receipt {
     repeated bytes addresses = 2;
   }
 
+  message Liquidated{
+
+  }
+
   oneof kind {
     Error err = 1;
     CreateSessionResult create_session_result = 2;
@@ -294,5 +304,6 @@ message Receipt {
     OracleSymbolFeedResult oracle_symbol_feed_result = 9;
     OracleUpdateResult oracle_update_result = 10;
     UpdateGuardianSetResult update_guardian_set_result = 11;
+    Liquidated liquidated = 12;
   }
 }
