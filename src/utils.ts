@@ -3,7 +3,7 @@ import { ed25519 } from "@noble/curves/ed25519";
 import { bls12_381 as bls } from "@noble/curves/bls12-381";
 import { secp256k1 as secp } from "@noble/curves/secp256k1";
 import { sha256 } from "@noble/hashes/sha256";
-import { KeyType, type Market, type Token } from "./types";
+import { D128, D64, KeyType, type Market, type Token } from "./types";
 import * as proto from "./gen/nord";
 
 export const SESSION_TTL = 10 * 60 * 1000 * 10000;
@@ -44,13 +44,39 @@ export function signAction(
 }
 
 /**
- * Converts a number to number type with the shift.
+ * Shifts input number by specified number of decimal digits.
  * @param x - value to convert.
- * @param tokenDecimals
- * @returns number.
+ * @param decimals - number of decimal digits to shift value by
+ * @returns shift result.
  */
-export function toShiftedNumber(x: number, tokenDecimals: number): number {
-  return x * Math.pow(10, tokenDecimals);
+export function toShiftedNumber(x: number, decimals: number): number {
+  return x * Math.pow(10, decimals);
+}
+
+/**
+ * Shifts input `Decimal` by specified number of decimal digits.
+ * Computation is performed with 64-bit (20-digit) precision
+ * @param x - value to convert.
+ * @param decimals - number of decimal digits to shift value by
+ * @returns shift result.
+ */
+export function toShiftedD64(x: Decimal.Value, decimals: number): Decimal {
+  x = new D64(x);
+  if (x.isZero()) return x;
+  return new D64(10).pow(decimals).mul(x);
+}
+
+/**
+ * Shifts input `Decimal` by specified number of decimal digits.
+ * Computation is performed with 128-bit (40-digit) precision
+ * @param x - value to convert.
+ * @param decimals - number of decimal digits to shift value by
+ * @returns shift result.
+ */
+export function toShiftedD128(x: Decimal.Value, decimals: number): Decimal {
+  x = new D128(x);
+  if (x.isZero()) return x;
+  return new D128(10).pow(decimals).mul(x);
 }
 
 /**

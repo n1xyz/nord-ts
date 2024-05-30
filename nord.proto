@@ -8,9 +8,9 @@ package nord;
 // Emulation of 128-bit integers since Protobuf doesn't have native support
 message U128 {
   // Low 64-bit word
-  uint64 lo = 1;
+  uint64 lo = 1 [jstype = JS_STRING];
   // High 64-bit word
-  uint64 hi = 2;
+  uint64 hi = 2 [jstype = JS_STRING];
 }
 
 enum Side {
@@ -134,12 +134,12 @@ message Action {
     // `1` here equals to market's `10^-price_decimals`
     // When used in token balances and reward computations, shifted by market's `price_decimals`.
     // Optional, treated as not set if 0.
-    uint64 price = 6;
+    uint64 price = 6 [jstype = JS_STRING];
     // Raw integral value of order size limit.
     // `1` here equals to market's `10^-size_decimals`
     // When used in token balances and reward computations, shifted by market's `size_decimals`.
     // Optional, treated as not set if 0.
-    uint64 size = 7;
+    uint64 size = 7 [jstype = JS_STRING];
     // Raw integral value of order quote size limit.
     // `1` here equals to market's `10^-(size_decimals + price_decimals)`
     // When used in token balances and reward computations, shifted by market's `size_decimals + price_decimals`.

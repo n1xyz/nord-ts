@@ -7,13 +7,13 @@
   "scripts": {
     "dev": "nodemon --exec npx tsc",
     "build:proto": "./protoc-generate.sh && rm -f ./src/gen/action_pb.js",
-    "test": "mocha -r ts-node/register test/*.ts",
+    "test": "jest",
     "docs": "npx typedoc --out ./docs ./src",
     "build": "npm run build:proto && tsc && npm run docs",
     "clean": "rm -rf ./src/gen && rm -rf docs",
     "lint": "yarn eslint --fix --ext .ts --ext .js src",
     "fmt": "yarn prettier --write src",
-    "ci": "yarn run lint && yarn run prettier --check src"
+    "ci": "yarn eslint --ext .ts --ext .js src && yarn prettier --check src"
   },
   "repository": {
     "type": "git",
@@ -35,9 +35,12 @@
     "eslint-plugin-import": "^2.25.2",
     "eslint-plugin-n": "^15.0.0 || ^16.0.0 ",
     "eslint-plugin-promise": "^6.0.0",
+    "jest": "^29.7.0",
+    "mocha": "^10.4.0",
     "prettier": "^3.1.1",
     "protoc-gen-js": "^3.21.2",
     "protoc-gen-ts": "^0.8.7",
+    "ts-jest": "^29.1.4",
     "ts-node": "^10.9.1",
     "ts-proto": "^1.156.7",
     "typedoc": "^0.25.0",

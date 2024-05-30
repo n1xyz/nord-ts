@@ -1,3 +1,4 @@
+import Decimal from "decimal.js";
 import * as proto from "./gen/nord";
 
 /**
@@ -67,8 +68,9 @@ export interface PlaceOrderParams {
   side: Side;
   fillMode: FillMode;
   isReduceOnly: boolean;
-  price: number;
-  size: number;
+  price: Decimal;
+  size: Decimal;
+  quote_size: Decimal;
   sessionId: number;
   nonce: number;
 }
@@ -326,4 +328,39 @@ export function fillModeToProtoFillMode(x: FillMode): proto.nord.FillMode {
   }
   if (x === FillMode.FillOrKill) return proto.nord.FillMode.FILL_OR_KILL;
   throw new Error("Invalid fill mode");
+}
+
+export const D64 = Decimal.clone({
+  precision: 20,
+  toExpPos: 20,
+  toExpNeg: -20,
+});
+export const D128 = Decimal.clone({
+  precision: 40,
+  toExpPos: 40,
+  toExpNeg: -40,
+});
+
+const DECIMAL_U64_BOUNDARY = new D64(2).pow(64);
+
+export const DECIMAL_U128_MAX = new D128(2).pow(128).sub(1);
+export const DECIMAL_U64_MAX = DECIMAL_U64_BOUNDARY.sub(1);
+/**
+ * Converts Decimal's integral part to 128-bit protobuf representation
+ * @param x Source `Decimal` to convert
+ * @returns Corresponding protobuf U128 number
+ * @throws If value is negative or above 2^128
+ */
+export function decimalToProtoU128(x: Decimal.Value): proto.nord.U128 {
+  x = new D128(x);
+
+  if (x.isNegative()) throw new Error("negative number");
+  if (x.isZero()) return new proto.nord.U128({ lo: "0", hi: "0" });
+
+  if (x.comparedTo(DECIMAL_U128_MAX) > 0) throw new Error("number overflow");
+
+  return new proto.nord.U128({
+    lo: x.mod(DECIMAL_U64_BOUNDARY).trunc().toString(),
+    hi: x.div(DECIMAL_U64_BOUNDARY).trunc().toString(),
+  });
 }

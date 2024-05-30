@@ -12,7 +12,12 @@
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "skipLibCheck": true,
-    "declaration": true
+  },
+  "typeAcquisition": {
+    "include": [
+      "jest",
+      "@types/jest"
+    ]
   },
   "exclude": ["dist", "**/node_modules/**/*"],
   "include": ["./src/**/*"]

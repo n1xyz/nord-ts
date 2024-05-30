@@ -16,6 +16,7 @@ import {
 import { NORD_RAMP_FACET_ABI } from "../abis/NORD_RAMP_FACET_ABI";
 import { FillMode, Order, Side } from "../types";
 import { Nord } from "./Nord";
+import Decimal from "decimal.js";
 
 export class NordUser {
   nord: Nord;
@@ -245,8 +246,9 @@ export class NordUser {
     side: Side,
     fillMode: FillMode,
     isReduceOnly: boolean,
-    size: number,
-    price?: number,
+    size?: Decimal.Value,
+    price?: Decimal.Value,
+    quote_size?: Decimal.Value,
   ): Promise<number> {
     const message = new PlaceOrderAction(
       this.nord.webServerUrl,
@@ -262,6 +264,7 @@ export class NordUser {
       isReduceOnly,
       size,
       price,
+      quote_size,
     );
 
     return await message.send();

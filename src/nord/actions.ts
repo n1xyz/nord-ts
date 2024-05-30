@@ -5,6 +5,7 @@ import {
   FillMode,
   fillModeToProtoFillMode,
   KeyType,
+  decimalToProtoU128,
   PlaceOrderParams,
   Side,
   WithdrawParams,
@@ -16,10 +17,13 @@ import {
   getCurrentTimestamp,
   printableError,
   SESSION_TTL,
+  toShiftedD128,
+  toShiftedD64,
   toShiftedNumber,
 } from "../utils";
 import * as proto from "../gen/nord";
 import fetch from "node-fetch";
+import Decimal from "decimal.js";
 
 export class Action {
   nordActionUrl: string;
@@ -197,11 +201,14 @@ export class PlaceOrderAction extends Action {
     side: Side,
     fillMode: FillMode,
     isReduceOnly: boolean,
-    size: number,
-    price?: number,
+    size?: Decimal.Value,
+    price?: Decimal.Value,
+    quote_size?: Decimal.Value,
   ) {
     super(url);
+    const ZERO = new Decimal(0);
     this.signFn = signFn;
+
     this.message = PlaceOrderAction.getPayload({
       userId,
       nonce,
@@ -209,8 +216,12 @@ export class PlaceOrderAction extends Action {
       side,
       fillMode,
       isReduceOnly,
-      price: toShiftedNumber(price ?? 0, priceDecimals),
-      size: toShiftedNumber(size, sizeDecimals),
+      price: toShiftedD64(price ?? ZERO, priceDecimals),
+      size: toShiftedD64(size ?? ZERO, sizeDecimals),
+      quote_size: toShiftedD128(
+        quote_size ?? ZERO,
+        priceDecimals + sizeDecimals,
+      ),
       sessionId,
     });
   }
@@ -238,18 +249,23 @@ export class PlaceOrderAction extends Action {
    * @param params.fillMode - (Limit | PostOnly | ImmediateOrCancel | FillOrKill)
    * @param params.isReduceOnly - If the order is reduce-only.
    * @param params.price - Price of the order (optional) (Decimal).
-   * @param params.size - Size of the order (Decimal).
+   * @param params.size - Size of the order (optional) (Decimal).
+   * @param params.quote_size - Quote size of the order (optional) (Decimal).
    * @param params.sessionId - ID of the session.
    * @returns Encoded message as Uint8Array.
    * @throws Will throw an error if order price or size is 0.
    */
   static getPayload(params: PlaceOrderParams): Uint8Array {
-    if (params.price !== undefined && params.price < 0) {
-      throw new Error("Cannot use 0 price for order.");
+    if (params.price !== undefined && params.price.isNeg()) {
+      throw new Error("Cannot use negative price for order.");
     }
 
-    if (params.size !== undefined && params.size < 0) {
-      throw new Error("Cannot use 0 size for order.");
+    if (params.size !== undefined && params.size.isNeg()) {
+      throw new Error("Cannot use negative size for order.");
+    }
+
+    if (params.quote_size !== undefined && params.quote_size.isNeg()) {
+      throw new Error("Cannot use negative quote size for order.");
     }
 
     const pbPlaceOrder = proto.nord.Action.fromObject({
@@ -261,8 +277,9 @@ export class PlaceOrderAction extends Action {
           params.side === Side.Bid ? proto.nord.Side.BID : proto.nord.Side.ASK,
         fill_mode: fillModeToProtoFillMode(params.fillMode),
         is_reduce_only: params.isReduceOnly,
-        price: params.price,
-        size: params.size,
+        price: params.price.toString(),
+        size: params.size.toString(),
+        quote_size: decimalToProtoU128(params.quote_size),
         session_id: params.sessionId,
       }),
     });
