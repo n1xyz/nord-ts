@@ -87,6 +87,7 @@ enum Error {
   INDEX_PRICE_OUT_OF_RANGE = 103;
   INDEX_DECIMALS_OUT_OF_RANGE = 104;
   INVALID_STATE_VERSION = 105;
+  POSITION_STATE_IS_WRONG_FOR_ORDER = 106;
   Dropped = 999;
 }
 
@@ -129,6 +130,11 @@ message Action {
     uint32 market_id = 2;
     Side side = 3;
     FillMode fill_mode = 4;
+    // A reduce-only order only reduces your current position, as opposed to increasing it. 
+    // It means you can only use it to close a position. 
+    // In contrast, non-reduce-only orders can reduce or increase your position.
+    // Reduce is handled by dynamically reducing or adjusting limit order's contract quantity
+    /// to match the contract size of the open position.    
     bool is_reduce_only = 5;
     // Raw integral value of order limit price.
     // `1` here equals to market's `10^-price_decimals`
