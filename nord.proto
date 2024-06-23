@@ -89,6 +89,8 @@ enum Error {
   INVALID_STATE_VERSION = 105;
   POSITION_STATE_IS_WRONG_FOR_ORDER = 106;
   INVALID_MARGINS = 107;
+  // means that liqudator cannot execute proposed action on behalf of user. 
+  LIQUDATOR_CANNOT_EXECUTE_PROPOSED_ACTION = 108;
   Dropped = 999;
 }
 
@@ -156,11 +158,17 @@ message Action {
     // of order sizes multiplied by respective prices. Since size is up to 48 bits and price is up to 64 bits,
     // their product can easily exceed 64 bits.
     U128 quote_size = 8;
+
+    // Optional user on behalf of whom the order to be placed.
+    // Executed only if sender has delegated authority to do so,
+    // like admin user or liquidator bot.
+    optional uint32 user_id = 32;    
   }
 
   message CancelOrderById {
     uint64 session_id = 1;
     uint64 order_id = 2;
+    optional uint32 user_id = 32;
   }
 
   message Deposit {
