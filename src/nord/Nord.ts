@@ -1,3 +1,4 @@
+import { ethers } from "ethers";
 import fetch from "node-fetch";
 import WebSocket from "ws";
 import {
@@ -26,11 +27,12 @@ import {
 } from "../types";
 import { decodeActionDelimited, MAX_BUFFER_LEN } from "../utils";
 import {
-  DEV_CONTRACT_ADDRESS,
   DEV_TOKEN_INFOS,
   EVM_DEV_URL,
   WEBSERVER_DEV_URL,
+  DEV_CONTRACT_ADDRESS,
 } from "../const";
+import { ERC20_ABI, NORD_RAMP_FACET_ABI } from "../abis";
 
 export class Nord {
   evmUrl: string;
@@ -99,6 +101,25 @@ export class Nord {
     return queryResponse;
   }
 
+  // Query the block info from rollman.
+  async queryLastNBlocks(): Promise<BlockResponse> {
+    const rollmanResponse: RollmanBlockResponse = await this.blockQueryRollman(
+      {},
+    );
+    const queryResponse: BlockResponse = {
+      block_number: rollmanResponse.block_number,
+      actions: [],
+    };
+    for (const rollmanAction of rollmanResponse.actions) {
+      const blockAction: ActionInfo = {
+        action_id: rollmanAction.action_id,
+        action: decodeActionDelimited(rollmanAction.action_pb),
+      };
+      queryResponse.actions.push(blockAction);
+    }
+    return queryResponse;
+  }
+
   // Query the block summary of recent blocks from rollman.
   async queryRecentBlocks(last_n: number): Promise<BlockSummaryResponse> {
     const response: BlockSummaryResponse =
@@ -144,22 +165,41 @@ export class Nord {
     const blockQuery: BlockQuery = {};
     const rollmanResponse: RollmanBlockResponse =
       await this.blockQueryRollman(blockQuery);
+
     const period = txPeakTpsPeriod.toString() + txPeakTpsPeriodUnit;
-    const query = `max_over_time(rate(nord_requests_count[1m])[${period}:1m])`;
+    const query = `max_over_time(rate(nord_requests_ok_count[1m])[${period}:1m])`;
 
     return {
       blocks_total: rollmanResponse.block_number,
-      tx_total: await this.queryPrometheus("nord_requests_count"),
+      tx_total: await this.queryPrometheus("nord_requests_ok_count"),
       tx_tps: await this.getCurrentTps(),
       tx_tps_peak: await this.queryPrometheus(query),
       request_latency_average: await this.queryPrometheus(
-        'nord_requests_latency{quantile="0.5"}',
+        'nord_requests_ok_latency{quantile="0.5"}',
       ),
     };
   }
 
-  private async getCurrentTps() {
-    return await this.queryPrometheus("rate(nord_requests_count[1m])");
+  async getCurrentTps(period: string = "1m") {
+    return await this.queryPrometheus(
+      "rate(nord_requests_ok_count[" + period + "])",
+    );
+  }
+
+  async getPeakTps(period: string = "24h") {
+    return await this.queryPrometheus(
+      "max_over_time(rate(nord_requests_ok_count[30s])[" + period + ":])",
+    );
+  }
+
+  async getMedianLatency(period: string = "1m") {
+    return await this.queryPrometheus(
+      `avg_over_time(nord_requests_ok_latency{quantile="0.5"}[${period}])`,
+    );
+  }
+
+  async getTotalTransactions() {
+    return await (await fetch(this.webServerUrl + "/last_actionid")).text();
   }
 
   // Helper to query rollman for block info.
@@ -218,6 +258,80 @@ export class Nord {
     // Prometheus HTTP API: https://prometheus.io/docs/prometheus/latest/querying/api/
     return Number(json.data.result[0].value[1]);
   }
+
+  static async approveTx(
+    privateAddress: string,
+    erc20address: string,
+    contractAddress: string,
+  ): Promise<void> {
+    const provider = new ethers.JsonRpcProvider(process.env.SECRET_FAUCET_RPC);
+    const wallet = new ethers.Wallet(privateAddress, provider);
+    const erc20Contract = new ethers.Contract(erc20address, ERC20_ABI, wallet);
+
+    const maxUint256 = ethers.MaxUint256;
+    const approveTx = await erc20Contract.approve(
+      contractAddress,
+      maxUint256.toString(),
+      {
+        maxFeePerGas: ethers.parseUnits("30", "gwei"),
+        maxPriorityFeePerGas: ethers.parseUnits("0.001", "gwei"),
+      },
+    );
+    return approveTx.hash;
+  }
+
+  static async depositOnlyTx(
+    privateAddress: string,
+    publicKey: Uint8Array,
+    amount: number,
+    precision: number,
+    contractAddress: string,
+  ): Promise<string> {
+    const provider = new ethers.JsonRpcProvider(process.env.SECRET_FAUCET_RPC);
+    const wallet = new ethers.Wallet(privateAddress, provider);
+    const nordContract = new ethers.Contract(
+      contractAddress,
+      NORD_RAMP_FACET_ABI,
+      wallet,
+    );
+    const depositTx = await nordContract.depositUnchecked(
+      publicKey,
+      BigInt(0),
+      ethers.parseUnits(amount.toString(), precision),
+      {
+        gasLimit: 1_000_000,
+        maxFeePerGas: ethers.parseUnits("100", "gwei"),
+        maxPriorityFeePerGas: ethers.parseUnits("0.01", "gwei"),
+      },
+    );
+    return depositTx.hash;
+  }
+
+  static async depositOnlyTxRaw(
+    privateAddress: string,
+    publicKey: Uint8Array,
+    amount: number,
+    precision: number,
+    contractAddress: string,
+  ): Promise<string> {
+    const provider = new ethers.JsonRpcProvider(process.env.SECRET_FAUCET_RPC);
+    const wallet = new ethers.Wallet(privateAddress, provider);
+    const nordContract = new ethers.Contract(
+      contractAddress,
+      NORD_RAMP_FACET_ABI,
+      wallet,
+    );
+    const depositTx = await nordContract.depositUnchecked.populateTransaction(
+      publicKey,
+      BigInt(0),
+      ethers.parseUnits(amount.toString(), precision),
+      {
+        maxFeePerGas: ethers.parseUnits("0.0003", "gwei"),
+        maxPriorityFeePerGas: ethers.parseUnits("0.0003", "gwei"),
+      },
+    );
+    return JSON.stringify(depositTx);
+  }
 }
 
 export class Subscriber {
@@ -234,29 +348,17 @@ export class Subscriber {
   subscribe(): void {
     const ws = new WebSocket(this.streamURL);
 
-    ws.on("open", () => {
-      console.log(`Connected to ${this.streamURL}`);
-    });
+    ws.on("open", () => {});
 
     ws.on("message", (rawData) => {
       const message: string = rawData.toLocaleString();
       const event: DeltaEvent | Trades | User = JSON.parse(message);
-      if (!this.checkEvent(event)) {
-        return;
-      }
       this.buffer.push(event);
       if (this.buffer.length > this.maxBufferLen) {
         this.buffer.shift();
       }
     });
 
-    ws.on("close", () => {
-      console.log(`Disconnected from ${this.streamURL}`);
-    });
-  }
-
-  checkEvent(_: DeltaEvent | Trades | User): boolean {
-    console.log(_);
-    return true;
+    ws.on("close", () => {});
   }
 }

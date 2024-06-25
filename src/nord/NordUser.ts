@@ -1,19 +1,14 @@
 import { BrowserProvider, ethers, SigningKey, MaxUint256 } from "ethers";
 import secp256k1 from "secp256k1";
-import {
-  DEFAULT_FUNDING_AMOUNTS,
-  DEV_CONTRACT_ADDRESS,
-  FAUCET_PRIVATE_ADDRESS,
-} from "../const";
+import { DEFAULT_FUNDING_AMOUNTS, FAUCET_PRIVATE_ADDRESS } from "../const";
 import { assert, findMarket, findToken } from "../utils";
-import { ERC20_ABI } from "../abis/ERC20_ABI";
+import { ERC20_ABI, NORD_RAMP_FACET_ABI } from "../abis";
 import {
   CancelOrderAction,
   CreateSessionAction,
   PlaceOrderAction,
   WithdrawAction,
 } from "./actions";
-import { NORD_RAMP_FACET_ABI } from "../abis/NORD_RAMP_FACET_ABI";
 import { FillMode, Order, Side } from "../types";
 import { Nord } from "./Nord";
 import Decimal from "decimal.js";
@@ -154,7 +149,7 @@ export class NordUser {
     this.publicKey = secp256k1.publicKeyConvert(publicKeyBuffer, true);
   }
 
-  async fundWallet() {
+  async fundEthWallet() {
     const provider = new ethers.JsonRpcProvider(this.nord.evmUrl);
     const wallet = new ethers.Wallet(FAUCET_PRIVATE_ADDRESS, provider);
     assert(DEFAULT_FUNDING_AMOUNTS["ETH"] != null);
@@ -163,19 +158,30 @@ export class NordUser {
       value: ethers.parseEther(DEFAULT_FUNDING_AMOUNTS["ETH"][0]),
     });
     await ethTx.wait();
+  }
+
+  async fundErc20Wallet() {
+    const provider = new ethers.JsonRpcProvider(this.nord.evmUrl);
+    const wallet = new ethers.Wallet(FAUCET_PRIVATE_ADDRESS, provider);
+    assert(DEFAULT_FUNDING_AMOUNTS["ETH"] != null);
     for (const tokenInfo of this.nord.tokenInfos) {
       const erc20Contract = new ethers.Contract(
         tokenInfo.address,
         ERC20_ABI,
         wallet,
       );
-      const defaultFundingAmount = DEFAULT_FUNDING_AMOUNTS[tokenInfo.address];
-      const tokenTx = await erc20Contract.transfer(
-        this.address,
-        ethers.parseUnits(defaultFundingAmount[0], defaultFundingAmount[1]),
-        { gasLimit: 1000000 },
-      );
-      tokenTx.wait();
+      if (DEFAULT_FUNDING_AMOUNTS[tokenInfo.address]) {
+        const defaultFundingAmount = DEFAULT_FUNDING_AMOUNTS[tokenInfo.address];
+        const tokenTx = await erc20Contract.transfer(
+          this.address,
+          ethers.parseUnits(defaultFundingAmount[0], defaultFundingAmount[1]),
+          {
+            maxFeePerGas: ethers.parseUnits("30", "gwei"),
+            maxPriorityFeePerGas: ethers.parseUnits("0.001", "gwei"),
+          },
+        );
+        await tokenTx.wait();
+      }
     }
   }
 
@@ -196,30 +202,104 @@ export class NordUser {
     amount: number,
     tokenId: number,
   ): Promise<void> {
-    if (tokenId || tokenId == 0) {
-      const erc20 = this.nord.tokenInfos[tokenId];
-      const erc20Contract = new ethers.Contract(
-        erc20.address,
-        ERC20_ABI,
-        await provider.getSigner(),
-      );
-      const approveTx = await erc20Contract.approve(
-        DEV_CONTRACT_ADDRESS,
-        MaxUint256,
-        { gasLimit: 1000000 },
-      );
-      await approveTx.wait();
+    const erc20 = this.nord.tokenInfos[tokenId];
+    const erc20Contract = new ethers.Contract(
+      erc20.address,
+      ERC20_ABI,
+      await provider.getSigner(),
+    );
 
+    const approveTx = await erc20Contract.approve(
+      this.nord.contractAddress,
+      MaxUint256,
+      {
+        maxFeePerGas: ethers.parseUnits("30", "gwei"),
+        maxPriorityFeePerGas: ethers.parseUnits("0.001", "gwei"),
+      },
+    );
+    await approveTx.wait();
+    const nordContract = new ethers.Contract(
+      this.nord.contractAddress,
+      NORD_RAMP_FACET_ABI,
+      await provider.getSigner(),
+    );
+    const depositTx = await nordContract.depositUnchecked(
+      this.publicKey,
+      BigInt(0),
+      ethers.parseUnits(amount.toString(), erc20.precision),
+      {
+        maxFeePerGas: ethers.parseUnits("30", "gwei"),
+        maxPriorityFeePerGas: ethers.parseUnits("0.001", "gwei"),
+      },
+    );
+    await depositTx.wait();
+  }
+
+  async depositApproveTx(
+    provider: BrowserProvider,
+    amount: number,
+    tokenId: number,
+  ): Promise<void> {
+    const erc20 = this.nord.tokenInfos[tokenId];
+    const erc20Contract = new ethers.Contract(
+      erc20.address,
+      ERC20_ABI,
+      await provider.getSigner(),
+    );
+
+    const approveTx = await erc20Contract.approve(
+      this.nord.contractAddress,
+      MaxUint256,
+      {
+        maxFeePerGas: ethers.parseUnits("30", "gwei"),
+        maxPriorityFeePerGas: ethers.parseUnits("0.001", "gwei"),
+      },
+    );
+    return approveTx.hash;
+  }
+
+  async depositOnlyTx(
+    provider: BrowserProvider,
+    amount: number,
+    tokenId: number,
+  ): Promise<void> {
+    const erc20 = this.nord.tokenInfos[tokenId];
+    const nordContract = new ethers.Contract(
+      this.nord.contractAddress,
+      NORD_RAMP_FACET_ABI,
+      await provider.getSigner(),
+    );
+    const depositTx = await nordContract.depositUnchecked(
+      this.publicKey,
+      BigInt(0),
+      ethers.parseUnits(amount.toString(), erc20.precision),
+      {
+        maxFeePerGas: ethers.parseUnits("30", "gwei"),
+        maxPriorityFeePerGas: ethers.parseUnits("0.001", "gwei"),
+      },
+    );
+    return depositTx.hash;
+  }
+
+  async depositEth(
+    provider: BrowserProvider,
+    amount: number,
+    tokenId: number,
+  ): Promise<void> {
+    if (tokenId || tokenId == 0) {
       const nordContract = new ethers.Contract(
-        DEV_CONTRACT_ADDRESS,
+        this.nord.contractAddress,
         NORD_RAMP_FACET_ABI,
         await provider.getSigner(),
       );
       const depositTx = await nordContract.depositUnchecked(
         this.publicKey,
-        BigInt(0),
-        ethers.parseUnits(amount.toString(), erc20.precision),
-        { gasLimit: 1000000 },
+        BigInt(1),
+        ethers.parseUnits(amount.toString(), 18),
+        {
+          maxFeePerGas: ethers.parseUnits("30", "gwei"),
+          maxPriorityFeePerGas: ethers.parseUnits("0.001", "gwei"),
+        },
       );
       await depositTx.wait();
     } else {
@@ -250,12 +330,13 @@ export class NordUser {
     price?: Decimal.Value,
     quote_size?: Decimal.Value,
   ): Promise<number> {
+    const market = findMarket(this.nord.markets, marketId);
     const message = new PlaceOrderAction(
       this.nord.webServerUrl,
       this.getNonce(),
       this.sessionSignFn,
-      findMarket(this.nord.markets, marketId).sizeDecimals,
-      findMarket(this.nord.markets, marketId).priceDecimals,
+      market.sizeDecimals,
+      market.priceDecimals,
       this.userId,
       this.sessionId,
       marketId,

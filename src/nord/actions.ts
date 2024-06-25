@@ -236,7 +236,7 @@ export class PlaceOrderAction extends Action {
       );
     }
 
-    return resp.place_order_result.posted.order_id;
+    return resp.place_order_result.posted?.order_id;
   }
 
   /**

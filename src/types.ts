@@ -108,13 +108,17 @@ export interface SubscriberConfig {
 
 export interface Market {
   symbol: string;
+  baseTokenId: number;
+  quoteTokenId: number;
   priceDecimals: number;
   sizeDecimals: number;
 }
 
 export interface Token {
   symbol: string;
+  ethAddr: string;
   decimals: number;
+  tokenId: number;
 }
 
 export interface Info {
