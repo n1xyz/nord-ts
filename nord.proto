@@ -91,6 +91,16 @@ enum Error {
   INVALID_MARGINS = 107;
   // means that liqudator cannot execute proposed action on behalf of user. 
   LIQUDATOR_CANNOT_EXECUTE_PROPOSED_ACTION = 108;
+  // Market's decimal parameters exceed either "quote limit" or "base limit"
+  // Two mentioned limits were deduced empirically and ensure
+  // that certain overflow errors don't happen when value rescaling is performed
+  // during order placement.
+  //
+  // For both perpetuals and spot markets,
+  // `quote_token.decimals - market.size_decimals - market.price_decimals` must be within range `[-19; 4]`
+  // For spot market,
+  // `base_token.decimals - market.size_decimals` must be within range `[-19; 23]`
+  MARKET_DECIMALS_EXCEED_LIMITS = 109;
   Dropped = 999;
 }
 
