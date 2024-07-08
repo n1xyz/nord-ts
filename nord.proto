@@ -101,6 +101,10 @@ enum Error {
   // For spot market,
   // `base_token.decimals - market.size_decimals` must be within range `[-19; 23]`
   MARKET_DECIMALS_EXCEED_LIMITS = 109;
+  TOO_MANY_TOKENS = 110;
+  BANKRUPTCY = 111;
+  BALANCE_OVERFLOW = 122;
+  FUNDING_OVERFLOW = 123;
   Dropped = 999;
 }
 
@@ -172,7 +176,11 @@ message Action {
     // Optional user on behalf of whom the order to be placed.
     // Executed only if sender has delegated authority to do so,
     // like admin user or liquidator bot.
-    optional uint32 user_id = 32;    
+    optional uint32 user_id = 32;
+
+    // User provided opaque order identifier up to 8 bytes.
+    // Not used by engine, but can be used by client to track orders.
+    optional uint64 client_order_id = 33;    
   }
 
   message CancelOrderById {
