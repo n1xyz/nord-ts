@@ -80,7 +80,7 @@ enum Error {
   PYTH_GUARDIAN_SET_INVALID = 97;
   UNINITIALIZED_PRICES = 98; // TODO(deprecate)
   PYTH_FEED_PRICE_OUT_OF_RANGE = 99;
-  INVALID_PARAMETERS = 100;
+  INVALID_TOKEN_PARAMETERS = 100;
   // Order requires some of its limits specified according to fill mode
   ORDER_MISSING_LIMITS = 101;
   ORDER_MISSING_PRICE = 102;
@@ -105,6 +105,9 @@ enum Error {
   BANKRUPTCY = 111;
   BALANCE_OVERFLOW = 122;
   FUNDING_OVERFLOW = 123;
+  /// If there is order to cancel for position, it should be canceled first before reducing position
+  CAN_REDUCE_POSITION_ONLY_IF_ALL_ORDERS_ARE_CANCELED = 124;
+  ORDER_SIZE_EXECUTION = 125;
   Dropped = 999;
 }
 
@@ -260,12 +263,16 @@ message Receipt {
     uint64 price = 3;
     uint64 size = 4;
     uint64 order_id = 5;
+    uint32 user_id = 6;
+    optional uint64 client_order_id = 7;
   }
 
   message Trade {
     uint64 order_id = 2;
+    // non zero
     uint64 price = 4;
     uint64 size = 5;
+    uint32 user_id = 6;
   }
 
   message CreateSessionResult {
@@ -279,6 +286,8 @@ message Receipt {
 
   message CancelOrderResult {
     uint64 order_id = 1;
+    // Account from which order was cancelled
+    uint32 user_id = 2;
   }
 
   message DepositResult {
