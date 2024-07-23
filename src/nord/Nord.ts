@@ -20,6 +20,7 @@ import {
   RollmanActionResponse,
   RollmanActionsResponse,
   RollmanBlockResponse,
+  MarketsStatsResponse,
   type SubscriberConfig,
   type Token,
   type Trades,
@@ -80,6 +81,14 @@ export class Nord {
     });
     await nord.fetchNordInfo();
     return nord;
+  }
+
+  public async marketsStats(): Promise<MarketsStatsResponse> {
+    const response = await fetch(`${this.webServerUrl}/markets_stats`, {
+      method: "GET",
+    });
+    const stats: MarketsStatsResponse = await response.json();
+    return stats;
   }
 
   // Query the block info from rollman.

@@ -1,6 +1,6 @@
+import { describe, it, expect } from "@jest/globals";
 import Decimal from "decimal.js";
 import { DECIMAL_U64_MAX, DECIMAL_U128_MAX, decimalToProtoU128 } from "../src/types";
-import { nord } from "../src/gen/nord";
 
 describe("D64 D128", () => {
     it("DECIMAL_U64_MAX exact value", () => {

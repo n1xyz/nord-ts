@@ -317,6 +317,22 @@ export interface RollmanActionExtendedInfo {
   action_pb: Uint8Array;
 }
 
+export interface MarketsStatsResponse {
+  markets: MarketStats[];
+}
+
+export interface MarketStats {
+  market_id: number;
+  index_price: number;
+  volume_24h: number;
+  high_24h: number;
+  low_24h: number;
+  mark_price?: number;
+  funding_rate?: number;
+  next_funding_time?: Date;
+  open_interest?: number;
+}
+
 /**
  * Converts a `FillMode` enum to its corresponding protobuf representation.
  *
