@@ -70,7 +70,6 @@ enum Error {
   EXPIRY_TIMESTAMP_IN_PAST = 16;
   UPDATE_TIMESTAMP_IN_PAST = 17;
   TOO_MANY_OPEN_ORDERS = 18;
-  TOO_MANY_OPEN_SESSIONS = 19;
   INVALID_ACTION_NONCE = 20;
   WITHDRAW_AMOUNT_TOO_SMALL = 21;
   PYTH_FEED_NOT_ADDED = 93;
@@ -230,6 +229,10 @@ message Action {
     uint64 user_id = 2;
   }
 
+  message RevokeSession {
+    uint64 session_id = 1;
+  }
+
   // Must be within 60s of the engine's current logical time, which
   // should be within a few seconds of real time.
   //
@@ -253,6 +256,7 @@ message Action {
     PythSetSymbolFeed pyth_set_symbol_feed = 12;
     PythPriceFeedUpdate pyth_price_feed_update = 13;
     Liquidate liquidate = 14;
+    RevokeSession revoke_session = 15;
   }
 }
 
@@ -330,9 +334,9 @@ message Receipt {
     repeated bytes addresses = 2;
   }
 
-  message Liquidated{
+  message Liquidated { }
 
-  }
+  message SessionRevoked { }
 
   oneof kind {
     Error err = 1;
@@ -347,5 +351,6 @@ message Receipt {
     OracleUpdateResult oracle_update_result = 10;
     UpdateGuardianSetResult update_guardian_set_result = 11;
     Liquidated liquidated = 12;
+    SessionRevoked session_revoked = 13;
   }
 }

@@ -9,6 +9,7 @@ import {
   PlaceOrderParams,
   Side,
   WithdrawParams,
+  RevokeSessionParams,
 } from "../types";
 import {
   checkPubKeyLength,
@@ -117,6 +118,59 @@ export class CreateSessionAction extends Action {
     });
 
     return encodeDelimited(pbCreateSession);
+  }
+}
+
+export class RevokeSessionAction extends Action {
+  message: Uint8Array;
+  walletSignFn: (message: Uint8Array) => Promise<string>;
+
+  constructor(
+    url: string,
+    nonce: number,
+    sessionId: number,
+    walletSignFn: (message: Uint8Array) => Promise<string>,
+  ) {
+    super(url);
+    this.walletSignFn = walletSignFn;
+
+    this.message = RevokeSessionAction.getPayload({
+      sessionId,
+      nonce,
+    });
+  }
+
+  async send(): Promise<void> {
+    const signature = await this.walletSignFn(this.message);
+    const body = new Uint8Array([
+      ...this.message,
+      ...ethers.getBytes(signature.slice(0, -2)),
+    ]);
+    const resp = decodeDelimited(await this.sendMessage(body));
+    if (resp.has_err) {
+      throw new Error(
+        `Could not create a new session, reason: ${printableError(resp.err)}`,
+      );
+    }
+  }
+
+  /**
+   * Generates a revokeSession action payload.
+   *
+   * @param params - Parameters to revoke existing session.
+   * @param params.sessionId - ID of the session.
+   * @returns Encoded message as Uint8Array.
+   */
+  static getPayload(params: RevokeSessionParams): Uint8Array {
+    const pbRevokeSession = proto.nord.Action.fromObject({
+      current_timestamp: getCurrentTimestamp(),
+      nonce: params.nonce,
+      revoke_session: new proto.nord.Action.RevokeSession({
+        session_id: params.sessionId,
+      }),
+    });
+
+    return encodeDelimited(pbRevokeSession);
   }
 }
 

@@ -62,6 +62,11 @@ export interface CreateSessionParams {
   nonce: number;
 }
 
+export interface RevokeSessionParams {
+  sessionId: number;
+  nonce: number;
+}
+
 export interface PlaceOrderParams {
   userId: number;
   marketId: number;

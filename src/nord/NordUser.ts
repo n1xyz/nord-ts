@@ -7,6 +7,7 @@ import {
   CancelOrderAction,
   CreateSessionAction,
   PlaceOrderAction,
+  RevokeSessionAction,
   WithdrawAction,
 } from "./actions";
 import { FillMode, Order, Side } from "../types";
@@ -195,6 +196,20 @@ export class NordUser {
       this.userId,
     );
     this.sessionId = await message.send();
+  }
+  /**
+   * Revokes session previously created by user
+   *
+   * @param sessionId - session identifier
+   */
+  async revokeSession(sessionId: number): Promise<void> {
+    const message = new RevokeSessionAction(
+      this.nord.webServerUrl,
+      this.getNonce(),
+      sessionId,
+      this.walletSignFn,
+    );
+    await message.send();
   }
 
   async deposit(
