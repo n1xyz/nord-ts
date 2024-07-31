@@ -107,6 +107,7 @@ enum Error {
   /// If there is order to cancel for position, it should be canceled first before reducing position
   CAN_REDUCE_POSITION_ONLY_IF_ALL_ORDERS_ARE_CANCELED = 124;
   ORDER_SIZE_EXECUTION = 125;
+  PYTH_GUARDIAN_SET_AND_PYTH_SIGNATURE_DO_NOT_MATCH = 126;
   Dropped = 999;
 }
 
