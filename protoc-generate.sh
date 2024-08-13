@@ -1,7 +1,7 @@
 #!/bin/sh
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-PROTO_PATH="${SCRIPT_DIR}/nord.proto"
+PROTO_PATH="${SCRIPT_DIR}/../engine/nord.proto"
 PLUGIN_PATH="${SCRIPT_DIR}/node_modules/.bin/protoc-gen-ts"
 OUT_DIR="${SCRIPT_DIR}/src/gen"
 
