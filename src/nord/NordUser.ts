@@ -77,7 +77,7 @@ export class NordUser {
   async updateUserId() {
     const hexPubkey = ethers.hexlify(this.publicKey!).slice(2);
     const userId = await (
-      await fetch("http://localhost:3000/user_id?pubkey=" + hexPubkey)
+      await fetch(this.nord.webServerUrl + "/user_id?pubkey=" + hexPubkey)
     ).json();
     if (typeof userId !== "number") {
       this.userId = -1;
@@ -113,7 +113,7 @@ export class NordUser {
     if (this.userId != -1) {
       // todo:implement class
       const data_ = await (
-        await fetch("http://localhost:3000/account?user_id=" + this.userId)
+        await fetch(this.nord.webServerUrl + "/account?user_id=" + this.userId)
       ).json();
       if (typeof data_ !== "object" || data_ === null) {
         throw new Error(`Unknown data returned: ${data_}`);
