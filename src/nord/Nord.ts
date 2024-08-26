@@ -35,6 +35,59 @@ import {
 } from "../const";
 import { ERC20_ABI, NORD_RAMP_FACET_ABI } from "../abis";
 
+export async function depositOnlyTx(
+  privateAddress: string,
+  publicKey: Uint8Array,
+  amount: number,
+  precision: number,
+  contractAddress: string,
+): Promise<string> {
+  const provider = new ethers.JsonRpcProvider(process.env.SECRET_FAUCET_RPC);
+  const wallet = new ethers.Wallet(privateAddress, provider);
+  const nordContract = new ethers.Contract(
+    contractAddress,
+    NORD_RAMP_FACET_ABI,
+    wallet,
+  );
+  const depositTx = await nordContract.depositUnchecked(
+    publicKey,
+    BigInt(0),
+    ethers.parseUnits(amount.toString(), precision),
+    {
+      gasLimit: 1_000_000,
+      maxFeePerGas: ethers.parseUnits("100", "gwei"),
+      maxPriorityFeePerGas: ethers.parseUnits("0.01", "gwei"),
+    },
+  );
+  return depositTx.hash;
+}
+
+export async function depositOnlyTxRaw(
+  privateAddress: string,
+  publicKey: Uint8Array,
+  amount: number,
+  precision: number,
+  contractAddress: string,
+): Promise<string> {
+  const provider = new ethers.JsonRpcProvider(process.env.SECRET_FAUCET_RPC);
+  const wallet = new ethers.Wallet(privateAddress, provider);
+  const nordContract = new ethers.Contract(
+    contractAddress,
+    NORD_RAMP_FACET_ABI,
+    wallet,
+  );
+  const depositTx = await nordContract.depositUnchecked.populateTransaction(
+    publicKey,
+    BigInt(0),
+    ethers.parseUnits(amount.toString(), precision),
+    {
+      maxFeePerGas: ethers.parseUnits("0.0003", "gwei"),
+      maxPriorityFeePerGas: ethers.parseUnits("0.0003", "gwei"),
+    },
+  );
+  return JSON.stringify(depositTx);
+}
+
 export class Nord {
   evmUrl: string;
   webServerUrl: string;
@@ -287,59 +340,6 @@ export class Nord {
       },
     );
     return approveTx.hash;
-  }
-
-  static async depositOnlyTx(
-    privateAddress: string,
-    publicKey: Uint8Array,
-    amount: number,
-    precision: number,
-    contractAddress: string,
-  ): Promise<string> {
-    const provider = new ethers.JsonRpcProvider(process.env.SECRET_FAUCET_RPC);
-    const wallet = new ethers.Wallet(privateAddress, provider);
-    const nordContract = new ethers.Contract(
-      contractAddress,
-      NORD_RAMP_FACET_ABI,
-      wallet,
-    );
-    const depositTx = await nordContract.depositUnchecked(
-      publicKey,
-      BigInt(0),
-      ethers.parseUnits(amount.toString(), precision),
-      {
-        gasLimit: 1_000_000,
-        maxFeePerGas: ethers.parseUnits("100", "gwei"),
-        maxPriorityFeePerGas: ethers.parseUnits("0.01", "gwei"),
-      },
-    );
-    return depositTx.hash;
-  }
-
-  static async depositOnlyTxRaw(
-    privateAddress: string,
-    publicKey: Uint8Array,
-    amount: number,
-    precision: number,
-    contractAddress: string,
-  ): Promise<string> {
-    const provider = new ethers.JsonRpcProvider(process.env.SECRET_FAUCET_RPC);
-    const wallet = new ethers.Wallet(privateAddress, provider);
-    const nordContract = new ethers.Contract(
-      contractAddress,
-      NORD_RAMP_FACET_ABI,
-      wallet,
-    );
-    const depositTx = await nordContract.depositUnchecked.populateTransaction(
-      publicKey,
-      BigInt(0),
-      ethers.parseUnits(amount.toString(), precision),
-      {
-        maxFeePerGas: ethers.parseUnits("0.0003", "gwei"),
-        maxPriorityFeePerGas: ethers.parseUnits("0.0003", "gwei"),
-      },
-    );
-    return JSON.stringify(depositTx);
   }
 }
 
