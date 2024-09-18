@@ -255,6 +255,7 @@ export class PlaceOrderAction extends Action {
     side: Side,
     fillMode: FillMode,
     isReduceOnly: boolean,
+    // NOTE: if `size` equals 1.0, it will sell whole unit, for example 1.0 BTC
     size?: Decimal.Value,
     price?: Decimal.Value,
     quote_size?: Decimal.Value,
