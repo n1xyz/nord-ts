@@ -1,14 +1,20 @@
 import { BrowserProvider, ethers, SigningKey, MaxUint256 } from "ethers";
 import secp256k1 from "secp256k1";
 import { DEFAULT_FUNDING_AMOUNTS, FAUCET_PRIVATE_ADDRESS } from "../const";
-import { assert, findMarket, findToken } from "../utils";
+import {
+  assert,
+  BigIntValue,
+  findMarket,
+  findToken,
+  optExpect,
+} from "../utils";
 import { ERC20_ABI, NORD_RAMP_FACET_ABI } from "../abis";
 import {
-  CancelOrderAction,
-  CreateSessionAction,
-  PlaceOrderAction,
-  RevokeSessionAction,
-  WithdrawAction,
+  cancelOrder,
+  createSession,
+  placeOrder,
+  revokeSession,
+  withdraw,
 } from "./actions";
 import { FillMode, Order, Side } from "../types";
 import { Nord } from "./Nord";
@@ -21,22 +27,22 @@ export class NordUser {
   sessionSignFn: (message: Uint8Array) => Promise<Uint8Array>;
   balances: { [string: string]: number } = {};
   orders: Order[] = [];
-  userId = -1;
-  sessionId = -1;
+  userId?: number;
+  sessionId?: bigint;
 
   publicKey: Uint8Array | undefined;
   lastTs = 0;
   lastNonce = 0;
 
   clone(): NordUser {
-    const newUser = new NordUser(
-      this.nord,
-      this.address,
-      this.walletSignFn,
-      this.sessionSignFn,
-      this.userId,
-      this.sessionId,
-    );
+    const newUser = new NordUser({
+      nord: this.nord,
+      address: this.address,
+      walletSignFn: this.walletSignFn,
+      sessionSignFn: this.sessionSignFn,
+      userId: this.userId,
+      sessionId: this.sessionId,
+    });
     newUser.publicKey = this.publicKey;
     newUser.lastTs = this.lastTs;
     newUser.lastNonce = this.lastNonce;
@@ -58,29 +64,31 @@ export class NordUser {
     return this.lastNonce;
   }
 
-  constructor(
-    nord: Nord,
-    address: string,
-    walletSignFn: (message: Uint8Array | string) => Promise<string>,
-    sessionSignFn: (message: Uint8Array) => Promise<Uint8Array>,
-    userId = -1,
-    sessionId = -1,
-  ) {
-    this.nord = nord;
-    this.address = address;
-    this.walletSignFn = walletSignFn;
-    this.sessionSignFn = sessionSignFn;
-    this.userId = userId;
-    this.sessionId = sessionId;
+  constructor(params: {
+    nord: Nord;
+    address: string;
+    walletSignFn: (message: Uint8Array | string) => Promise<string>;
+    sessionSignFn: (message: Uint8Array) => Promise<Uint8Array>;
+    userId?: number;
+    sessionId?: bigint;
+  }) {
+    this.nord = params.nord;
+    this.address = params.address;
+    this.walletSignFn = params.walletSignFn;
+    this.sessionSignFn = params.sessionSignFn;
+    this.userId = params.userId;
+    this.sessionId = params.sessionId;
   }
 
   async updateUserId() {
-    const hexPubkey = ethers.hexlify(this.publicKey!).slice(2);
+    const hexPubkey = ethers
+      .hexlify(optExpect(this.publicKey, "No user public key"))
+      .slice(2);
     const userId = await (
       await fetch(this.nord.webServerUrl + "/user_id?pubkey=" + hexPubkey)
     ).json();
     if (typeof userId !== "number") {
-      this.userId = -1;
+      this.userId = undefined;
       if (typeof userId === "object" && userId !== null && "error" in userId) {
         throw new Error(`Could not fetch user id: ${userId.error ?? null}`);
       } else {
@@ -110,10 +118,10 @@ export class NordUser {
       balances: Balance[];
     }
 
-    if (this.userId != -1) {
+    if (this.userId !== undefined) {
       // todo:implement class
       const data_ = await (
-        await fetch(this.nord.webServerUrl + "/account?user_id=" + this.userId)
+        await fetch(this.nord.webServerUrl + "/user?user_id=" + this.userId)
       ).json();
       if (typeof data_ !== "object" || data_ === null) {
         throw new Error(`Unknown data returned: ${data_}`);
@@ -187,29 +195,30 @@ export class NordUser {
   }
 
   async refreshSession(sessionPk: Uint8Array): Promise<void> {
-    assert(sessionPk.length === 32);
-    const message = new CreateSessionAction(
+    this.sessionId = await createSession(
       this.nord.webServerUrl,
-      this.getNonce(),
-      sessionPk,
       this.walletSignFn,
-      this.userId,
+      this.getNonce(),
+      {
+        userId: optExpect(this.userId, "No user"),
+        sessionPubkey: sessionPk,
+      },
     );
-    this.sessionId = await message.send();
   }
   /**
    * Revokes session previously created by user
    *
    * @param sessionId - session identifier
    */
-  async revokeSession(sessionId: number): Promise<void> {
-    const message = new RevokeSessionAction(
+  async revokeSession(sessionId: BigIntValue): Promise<void> {
+    return revokeSession(
       this.nord.webServerUrl,
-      this.getNonce(),
-      sessionId,
       this.walletSignFn,
+      this.getNonce(),
+      {
+        sessionId,
+      },
     );
-    await message.send();
   }
 
   async deposit(
@@ -323,60 +332,53 @@ export class NordUser {
   }
 
   async withdraw(tokenId: number, amount: number): Promise<void> {
-    const message = new WithdrawAction(
-      this.nord.webServerUrl,
-      this.getNonce(),
-      this.sessionSignFn,
-      findToken(this.nord.tokens, tokenId).decimals,
-      tokenId,
-      this.sessionId,
+    withdraw(this.nord.webServerUrl, this.sessionSignFn, this.getNonce(), {
+      sizeDecimals: findToken(this.nord.tokens, tokenId).decimals,
+      sessionId: optExpect(this.sessionId, "No session"),
+      tokenId: tokenId,
       amount,
-    );
-
-    await message.send();
+    });
   }
 
-  async placeOrder(
-    marketId: number,
-    side: Side,
-    fillMode: FillMode,
-    isReduceOnly: boolean,
-    size?: Decimal.Value,
-    price?: Decimal.Value,
-    quote_size?: Decimal.Value,
-  ): Promise<number> {
-    const market = findMarket(this.nord.markets, marketId);
-    const message = new PlaceOrderAction(
-      this.nord.webServerUrl,
-      this.getNonce(),
-      this.sessionSignFn,
-      market.sizeDecimals,
-      market.priceDecimals,
-      this.userId,
-      this.sessionId,
-      marketId,
-      side,
-      fillMode,
-      isReduceOnly,
-      size,
-      price,
-      quote_size,
-    );
+  async placeOrder(params: {
+    marketId: number;
+    side: Side;
+    fillMode: FillMode;
+    isReduceOnly: boolean;
+    size?: Decimal.Value;
+    price?: Decimal.Value;
+    quoteSize?: Decimal.Value;
+  }): Promise<bigint | undefined> {
+    const market = findMarket(this.nord.markets, params.marketId);
 
-    return await message.send();
+    return placeOrder(
+      this.nord.webServerUrl,
+      this.sessionSignFn,
+      this.getNonce(),
+      {
+        sessionId: optExpect(this.sessionId, "No session"),
+        sizeDecimals: market.sizeDecimals,
+        priceDecimals: market.priceDecimals,
+        marketId: params.marketId,
+        side: params.side,
+        fillMode: params.fillMode,
+        isReduceOnly: params.isReduceOnly,
+        size: params.size,
+        price: params.price,
+        quoteSize: params.quoteSize,
+      },
+    );
   }
 
-  async cancelOrder(marketId: number, orderId: number): Promise<number> {
-    const message = new CancelOrderAction(
+  async cancelOrder(orderId: BigIntValue): Promise<bigint> {
+    return cancelOrder(
       this.nord.webServerUrl,
-      this.getNonce(),
       this.sessionSignFn,
-      this.userId,
-      this.sessionId,
-      marketId,
-      orderId,
+      this.getNonce(),
+      {
+        sessionId: optExpect(this.sessionId, "No session"),
+        orderId,
+      },
     );
-
-    return await message.send();
   }
 }

@@ -1,5 +1,4 @@
 import { ethers } from "ethers";
-import fetch from "node-fetch";
 import WebSocket from "ws";
 import {
   ActionInfo,
@@ -26,7 +25,7 @@ import {
   type Trades,
   type User,
 } from "../types";
-import { decodeActionDelimited, MAX_BUFFER_LEN } from "../utils";
+import { checkedFetch, decodeLengthDelimited, MAX_BUFFER_LEN } from "../utils";
 import {
   DEV_TOKEN_INFOS,
   EVM_DEV_URL,
@@ -34,6 +33,7 @@ import {
   DEV_CONTRACT_ADDRESS,
 } from "../const";
 import { ERC20_ABI, NORD_RAMP_FACET_ABI } from "../abis";
+import * as proto from "../gen/nord";
 
 export async function depositOnlyTx(
   privateAddress: string,
@@ -111,7 +111,7 @@ export class Nord {
   }
 
   async fetchNordInfo() {
-    const response = await fetch(`${this.webServerUrl}/info`, {
+    const response = await checkedFetch(`${this.webServerUrl}/info`, {
       method: "GET",
     });
     const info: Info = await response.json();
@@ -137,7 +137,7 @@ export class Nord {
   }
 
   public async marketsStats(): Promise<MarketsStatsResponse> {
-    const response = await fetch(`${this.webServerUrl}/markets_stats`, {
+    const response = await checkedFetch(`${this.webServerUrl}/stats`, {
       method: "GET",
     });
     const stats: MarketsStatsResponse = await response.json();
@@ -156,7 +156,7 @@ export class Nord {
     for (const rollmanAction of rollmanResponse.actions) {
       const blockAction: ActionInfo = {
         action_id: rollmanAction.action_id,
-        action: decodeActionDelimited(rollmanAction.action_pb),
+        action: decodeLengthDelimited(rollmanAction.action_pb, proto.Action),
       };
       queryResponse.actions.push(blockAction);
     }
@@ -175,7 +175,7 @@ export class Nord {
     for (const rollmanAction of rollmanResponse.actions) {
       const blockAction: ActionInfo = {
         action_id: rollmanAction.action_id,
-        action: decodeActionDelimited(rollmanAction.action_pb),
+        action: decodeLengthDelimited(rollmanAction.action_pb, proto.Action),
       };
       queryResponse.actions.push(blockAction);
     }
@@ -195,7 +195,7 @@ export class Nord {
       await this.actionQueryRollman(query);
     return {
       block_number: rollmanResponse.block_number,
-      action: decodeActionDelimited(rollmanResponse.action_pb),
+      action: decodeLengthDelimited(rollmanResponse.action_pb, proto.Action),
     };
   }
 
@@ -211,7 +211,10 @@ export class Nord {
       const extendedActionInfo: ActionsExtendedInfo = {
         block_number: rollmanExtendedAction.block_number,
         action_id: rollmanExtendedAction.action_id,
-        action: decodeActionDelimited(rollmanExtendedAction.action_pb),
+        action: decodeLengthDelimited(
+          rollmanExtendedAction.action_pb,
+          proto.Action,
+        ),
       };
       queryResponse.actions.push(extendedActionInfo);
     }
@@ -261,7 +264,9 @@ export class Nord {
   }
 
   async getTotalTransactions() {
-    return await (await fetch(this.webServerUrl + "/last_actionid")).text();
+    return await (
+      await checkedFetch(this.webServerUrl + "/last_actionid")
+    ).text();
   }
 
   // Helper to query rollman for block info.
@@ -270,7 +275,7 @@ export class Nord {
     if (query.block_number != null) {
       url = url + "?block_number=" + query.block_number;
     }
-    const response = await fetch(url);
+    const response = await checkedFetch(url);
     if (!response.ok) {
       throw new Error("Rollman query failed " + url);
     }
@@ -282,7 +287,7 @@ export class Nord {
     last_n: number,
   ): Promise<BlockSummaryResponse> {
     const url = this.webServerUrl + "/last_n_blocks?last_n=" + last_n;
-    const response = await fetch(url);
+    const response = await checkedFetch(url);
     if (!response.ok) {
       throw new Error("Rollman query failed " + url);
     }
@@ -292,7 +297,7 @@ export class Nord {
   // Helper to query rollman for action info.
   async actionQueryRollman(query: ActionQuery): Promise<RollmanActionResponse> {
     const url = this.webServerUrl + "/tx_query?action_id=" + query.action_id;
-    const response = await fetch(url);
+    const response = await checkedFetch(url);
     if (!response.ok) {
       throw new Error("Rollman query failed " + url);
     }
@@ -302,7 +307,7 @@ export class Nord {
   // Helper to query rollman for recent actions.
   async actionsQueryRollman(last_n: number): Promise<RollmanActionsResponse> {
     const url = this.webServerUrl + "/last_n_actions?last_n=" + last_n;
-    const response = await fetch(url);
+    const response = await checkedFetch(url);
     if (!response.ok) {
       throw new Error("Rollman query failed " + url);
     }
@@ -312,7 +317,7 @@ export class Nord {
   // Helper to query prometheus.
   async queryPrometheus(params: string): Promise<number> {
     const url = this.webServerUrl + "/prometheus_query?query=" + params;
-    const response = await fetch(url);
+    const response = await checkedFetch(url);
     if (!response.ok) {
       throw new Error("Prometheus query failed " + url);
     }

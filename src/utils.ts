@@ -3,8 +3,12 @@ import { ed25519 } from "@noble/curves/ed25519";
 import { bls12_381 as bls } from "@noble/curves/bls12-381";
 import { secp256k1 as secp } from "@noble/curves/secp256k1";
 import { sha256 } from "@noble/hashes/sha256";
-import { D128, D64, KeyType, type Market, type Token } from "./types";
+import { KeyType, type Market, type Token } from "./types";
 import * as proto from "./gen/nord";
+import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
+import { ethers } from "ethers";
+import fetch from "node-fetch";
+import { RequestInfo, RequestInit, Response } from "node-fetch";
 
 export const SESSION_TTL = 10 * 60 * 1000 * 10000;
 export const ZERO_DECIMAL = new Decimal(0);
@@ -12,11 +16,55 @@ export const MAX_BUFFER_LEN = 10_000;
 
 const MAX_PAYLOAD_SIZE = 100 * 1024; // 100 kB
 
-export const assert = (pred: boolean): void => {
-  if (!pred) {
-    throw new Error("assertion violation");
-  }
-};
+/** Any type convertible to bigint */
+export type BigIntValue = bigint | number | string;
+
+export function panic(message: string): never {
+  throw new Error(message);
+}
+
+export function assert(predicate: boolean, message?: string): void {
+  if (!predicate) panic(message ?? "Assertion violated");
+}
+/**
+ * Extracts value out of optional if it's defined, or throws error if it's not
+ * @param value   Optional value to unwrap
+ * @param message Error message
+ * @returns       Unwrapped value
+ */
+export function optExpect<T>(value: T | undefined, message: string): T {
+  if (value === undefined) throw new Error(message);
+  return value as T;
+}
+/**
+ * Unwraps optional value with default error message
+ * @param value
+ * @returns
+ */
+export function optUnwrap<T>(value: T | undefined): T {
+  return optExpect(value, "Optional contains no value");
+}
+/**
+ * Applies function to value if it's defined, or passes `undefined` through
+ * @param value Optional value to map
+ * @param mapFn Mapper function
+ * @returns     Either mapped value or undefined
+ */
+export function optMap<T, U>(
+  value: T | undefined,
+  mapFn: (arg: T) => U,
+): U | undefined {
+  return value !== undefined ? mapFn(value) : undefined;
+}
+
+export async function checkedFetch(
+  url: RequestInfo,
+  init?: RequestInit,
+): Promise<Response> {
+  const resp = await fetch(url, init);
+  assert(resp.ok, `Request failed with ${resp.status}: ${resp.statusText}`);
+  return resp;
+}
 
 /**
  * Signs an action using the specified secret key and key type.
@@ -31,7 +79,7 @@ export function signAction(
   keyType: KeyType,
 ): Uint8Array {
   let sig: Uint8Array;
-  if (keyType === KeyType.Ed25119) {
+  if (keyType === KeyType.Ed25519) {
     sig = ed25519.sign(action, sk);
   } else if (keyType === KeyType.Bls12_381) {
     sig = bls.sign(action, sk);
@@ -44,123 +92,175 @@ export function signAction(
 }
 
 /**
- * Shifts input number by specified number of decimal digits.
- * @param x - value to convert.
- * @param decimals - number of decimal digits to shift value by
- * @returns shift result.
+ * Constructs wallet signing function, usable with `NordUser` type
+ *
+ * @param walletKey   Either raw signing key as bytes array or hex string prefixed with `"0x"`
+ * @returns           Async function which accepts arbitrary message, generates its digets,
+ *                    then signs it with provided user wallet key and returns signature
+ *                    as hex string prefixed with `"0x"`
  */
-export function toShiftedNumber(x: number, decimals: number): number {
-  return x * Math.pow(10, decimals);
+export function makeWalletSignFn(
+  walletKey: ethers.BytesLike,
+): (message: Uint8Array | string) => Promise<string> {
+  const signingKey = new ethers.SigningKey(walletKey);
+  return async (message) =>
+    signingKey.sign(ethers.hashMessage(message)).serialized;
+}
+
+function makeToScaledBigUint(params: {
+  precision: number;
+  exponent: number;
+  bits: number;
+}): (x: Decimal.Value, decimals: number) => bigint {
+  const Dec = Decimal.clone({
+    precision: params.precision,
+    toExpPos: params.exponent,
+    toExpNeg: -params.exponent,
+  });
+
+  const Ten = new Dec(10);
+
+  const Max = new Dec(((1n << BigInt(params.bits)) - 1n).toString());
+
+  return (x, decimals) => {
+    const dec = new Dec(x);
+
+    if (dec.isZero()) {
+      return 0n;
+    }
+
+    if (dec.isNeg()) {
+      throw new Error(`Number is negative`);
+    }
+
+    const scaled = Ten.pow(decimals).mul(dec).truncated();
+    if (scaled.isZero()) {
+      throw new Error(
+        `Precision loss when converting ${dec} to scaled integer`,
+      );
+    }
+
+    if (scaled > Max) {
+      throw new Error(
+        `Integer is out of range: ${scaled} exceeds limit ${Max}`,
+      );
+    }
+
+    return BigInt(scaled.toString());
+  };
+}
+/**
+ * Converts decimal value into rescaled 64-bit unsigned integer
+ * by scaling it up by specified number of decimal digits.
+ *
+ * Ensures that number won't accidentally become zero
+ * or exceed U64's value range
+ *
+ * @param x         Decimal value to rescale
+ * @param decimals  Number of decimal digits
+ * @returns         Rescaled unsigned integer
+ */
+export const toScaledU64 = makeToScaledBigUint({
+  bits: 64,
+  precision: 20,
+  exponent: 28,
+});
+/**
+ * Converts decimal value into rescaled 128-bit unsigned integer
+ * by scaling it up by specified number of decimal digits.
+ *
+ * Ensures that number won't accidentally become zero
+ * or exceed U128's value range
+ *
+ * @param x         Decimal value to rescale
+ * @param decimals  Number of decimal digits
+ * @returns         Rescaled unsigned integer
+ */
+export const toScaledU128 = makeToScaledBigUint({
+  bits: 128,
+  precision: 40,
+  exponent: 56,
+});
+
+const U64_MAX = (1n << 64n) - 1n;
+const U128_MAX = (1n << 128n) - 1n;
+/**
+ * Converts U128 into pair of U64 numbers, to pass it through protobuf
+ * @param value integer, must fit U128 limits
+ * @returns     Pair of U64 integers which represent original number split in two
+ */
+export function bigIntToProtoU128(value: bigint): proto.U128 {
+  if (value < 0n) {
+    throw new Error(`Negative number (${value})`);
+  }
+
+  if (value > U128_MAX) {
+    throw new Error(`U128 overflow (${value})`);
+  }
+
+  return {
+    lo: value & U64_MAX,
+    hi: (value >> 64n) & U64_MAX,
+  };
 }
 
 /**
- * Shifts input `Decimal` by specified number of decimal digits.
- * Computation is performed with 64-bit (20-digit) precision
- * @param x - value to convert.
- * @param decimals - number of decimal digits to shift value by
- * @returns shift result.
+ * Encodes any protobuf message into a length-delimited format,
+ * i.e. prefixed with its length encoded as varint
+ * @param   message message object
+ * @param   coder   associated coder object which implements `MessageFns` interface
+ * @returns         Encoded message as Uint8Array, prefixed with its length
  */
-export function toShiftedD64(x: Decimal.Value, decimals: number): Decimal {
-  x = new D64(x);
-  if (x.isZero()) return x;
-  return new D64(10).pow(decimals).mul(x);
+export function encodeLengthDelimited<T, M extends proto.MessageFns<T>>(
+  message: T,
+  coder: M,
+): Uint8Array {
+  const encoded = coder.encode(message).finish();
+  if (encoded.byteLength > MAX_PAYLOAD_SIZE) {
+    throw new Error(
+      `Encoded message size (${encoded.byteLength} bytes) is greater than max payload size (${MAX_PAYLOAD_SIZE} bytes).`,
+    );
+  }
+  const encodedLength = new BinaryWriter().uint32(encoded.byteLength).finish();
+  return new Uint8Array([...encodedLength, ...encoded]);
 }
 
 /**
- * Shifts input `Decimal` by specified number of decimal digits.
- * Computation is performed with 128-bit (40-digit) precision
- * @param x - value to convert.
- * @param decimals - number of decimal digits to shift value by
- * @returns shift result.
+ * Decodes any protobuf message from a length-delimited format,
+ * i.e. prefixed with its length encoded as varint
+ *
+ * NB: Please note that due to limitations of Typescript type inference
+ * it requires to specify variable type explicitly:
+ *
+ * ```
+ * const foo: proto.Bar = decodeLengthDelimited(bytes, proto.Bar);
+ * ```
+ *
+ * @param   bytes Byte array with encoded message
+ * @param   coder associated coder object which implements `MessageFns` interface
+ * @returns       Decoded Action as Uint8Array.
  */
-export function toShiftedD128(x: Decimal.Value, decimals: number): Decimal {
-  x = new D128(x);
-  if (x.isZero()) return x;
-  return new D128(10).pow(decimals).mul(x);
-}
+export function decodeLengthDelimited<T, M extends proto.MessageFns<T>>(
+  bytes: Uint8Array,
+  coder: M,
+): T {
+  const lengthReader = new BinaryReader(bytes);
+  const msgLength = lengthReader.uint32();
+  const startsAt = lengthReader.pos;
 
-/**
- * Encodes an Action in length-delimited format.
- * @param a - Action object to encode.
- * @returns Encoded Action as Uint8Array.
- */
-export function encodeDelimited(a: proto.nord.Action): Uint8Array {
-  const e: Uint8Array = a.serialize();
-  if (e.byteLength > MAX_PAYLOAD_SIZE) {
-    throw new Error("Encoded action can't be greater than 100 kB.");
-  }
-  return new Uint8Array([...toVarInt(e.byteLength), ...e]);
-}
-
-/**
- * Decodes an Action in length-delimited format.
- * @param u - Encoded Action as Uint8Array to decode.
- * @returns Decoded Action as Uint8Array.
- */
-export function decodeActionDelimited(u: Uint8Array): proto.nord.Action {
-  // Find the varint length of the protobuf.
-  let index = 0;
-  let protoLen = 0;
-  while (u[index] >> 7 > 0) {
-    protoLen |= (u[index] & 0b1111111) << (index * 7);
-    index++;
-  }
-  protoLen |= (u[index] & 0b1111111) << (index * 7);
-
-  // Decode only the part specified by the varint length.
-  const remainingLen = u.length - index - 1;
-  const len = Math.min(remainingLen, protoLen);
-  return proto.nord.Action.deserialize(u.slice(index + 1, index + 1 + len));
-}
-
-/**
- * Decodes a Receipt in length-delimited format.
- * @param u - Encoded Receipt as Uint8Array to decode.
- * @returns Decoded Receipt as Uint8Array.
- */
-export function decodeDelimited(u: Uint8Array): proto.nord.Receipt {
-  let index = 0;
-  while (u[index] >> 7 > 0) {
-    index++;
-  }
-  return proto.nord.Receipt.deserialize(u.slice(index + 1));
-}
-
-/**
- * Converts an integer to its varint representation.
- * @param x - Integer to encode.
- * @returns Encoded integer as a varint Uint8Array.
- */
-export function toVarInt(x: number): Uint8Array {
-  if (!Number.isInteger(x)) {
-    throw new Error("Can only encode integer to varint.");
+  if (msgLength > MAX_PAYLOAD_SIZE) {
+    throw new Error(
+      `Encoded message size (${msgLength} bytes) is greater than max payload size (${MAX_PAYLOAD_SIZE} bytes).`,
+    );
   }
 
-  if (x < 0) {
-    throw new Error("Cannot encode negative integer to varint.");
+  if (startsAt + msgLength > bytes.byteLength) {
+    throw new Error(
+      `Encoded message size (${msgLength} bytes) is greater than remaining buffer size (${bytes.byteLength - startsAt} bytes).`,
+    );
   }
 
-  if (x > Math.pow(2, 31) - 1) {
-    throw new Error("Can only encode up to int32 max.");
-  }
-
-  if (x === 0) {
-    return Uint8Array.from([0]);
-  }
-
-  x |= 0;
-
-  const r: number[] = [];
-  while (x !== 0) {
-    r.push(x & 0b1111111);
-    x >>= 7;
-  }
-
-  for (let i = 0; i < r.length - 1; i += 1) {
-    r[i] |= 1 << 7;
-  }
-
-  return Uint8Array.from(r);
+  return coder.decode(bytes.slice(startsAt, startsAt + msgLength));
 }
 
 export function checkPubKeyLength(keyType: KeyType, len: number): void {
@@ -170,8 +270,8 @@ export function checkPubKeyLength(keyType: KeyType, len: number): void {
     );
   }
 
-  if (len !== 32 && keyType === KeyType.Ed25119) {
-    throw new Error("Ed25119 pubkeys must be 32 length.");
+  if (len !== 32 && keyType === KeyType.Ed25519) {
+    throw new Error("Ed25519 pubkeys must be 32 length.");
   }
 
   if (len !== 33 && keyType === KeyType.Secp256k1) {
@@ -199,13 +299,4 @@ export function findToken(tokens: Token[], tokenId: number): Token {
     throw new Error(`The token with tokenId=${tokenId} not found`);
   }
   return tokens[tokenId];
-}
-
-export function printableError(e: unknown): string {
-  if (Number.isInteger(e)) {
-    return proto.nord.Error[e as number];
-  } else {
-    // DUPLICATE
-    return `Unknown error: ${e}`;
-  }
 }
