@@ -76,12 +76,13 @@ async function createSessionImpl(
   walletSignFn: (message: string | Uint8Array) => Promise<string>,
   nonce: number,
   params: {
-    userId: number;
+    userPubkey: Uint8Array;
     sessionPubkey: Uint8Array;
     // If not specified, set to current moment plus default session TTL
     expiryTimestamp?: number;
   },
 ): Promise<bigint> {
+  checkPubKeyLength(KeyType.Secp256k1, params.userPubkey.length);
   checkPubKeyLength(KeyType.Ed25519, params.sessionPubkey.length);
 
   const now = getCurrentTimestamp();
@@ -103,7 +104,7 @@ async function createSessionImpl(
     kind: {
       $case: "createSession",
       value: {
-        userId: params.userId,
+        userPubkey: params.userPubkey,
         blstPubkey: params.sessionPubkey,
         expiryTimestamp: BigInt(expiry),
       },
@@ -129,7 +130,7 @@ export async function createSession(
   walletSignFn: (message: string | Uint8Array) => Promise<string>,
   nonce: number,
   params: {
-    userId: number;
+    userPubkey: Uint8Array;
     sessionPubkey: Uint8Array;
     // If not specified, set to current moment plus default session TTL
     expiryTimestamp?: number;
@@ -239,6 +240,8 @@ async function placeOrderImpl(
   nonce: number,
   params: {
     sessionId: BigIntValue;
+    senderId?: number;
+    liquidateeId?: number;
     sizeDecimals: number;
     priceDecimals: number;
     marketId: number;
@@ -249,7 +252,6 @@ async function placeOrderImpl(
     size?: Decimal.Value;
     price?: Decimal.Value;
     quoteSize?: Decimal.Value;
-    liquidateeId?: number;
     clientOrderId?: BigIntValue;
   },
 ): Promise<bigint | undefined> {
@@ -268,6 +270,7 @@ async function placeOrderImpl(
       $case: "placeOrder",
       value: {
         sessionId: BigInt(params.sessionId),
+        senderAccountId: params.senderId,
         marketId: params.marketId,
         side: params.side === Side.Bid ? proto.Side.BID : proto.Side.ASK,
         fillMode: fillModeToProtoFillMode(params.fillMode),
@@ -276,7 +279,7 @@ async function placeOrderImpl(
         size,
         quoteSize: bigIntToProtoU128(quoteSize),
         clientOrderId: optMap(params.clientOrderId, (x) => BigInt(x)),
-        userId: params.liquidateeId,
+        delegatorAccountId: params.liquidateeId,
       },
     },
   };
@@ -301,6 +304,7 @@ export async function placeOrder(
   nonce: number,
   params: {
     sessionId: BigIntValue;
+    senderId?: number;
     sizeDecimals: number;
     priceDecimals: number;
     marketId: number;
@@ -323,6 +327,7 @@ async function cancelOrderImpl(
   nonce: number,
   params: {
     sessionId: BigIntValue;
+    senderId?: number;
     orderId: BigIntValue;
     liquidateeId?: number;
   },
@@ -335,7 +340,8 @@ async function cancelOrderImpl(
       value: {
         orderId: BigInt(params.orderId),
         sessionId: BigInt(params.sessionId),
-        userId: params.liquidateeId,
+        senderAccountId: params.senderId,
+        delegatorAccountId: params.liquidateeId,
       },
     },
   };
@@ -360,6 +366,7 @@ export async function cancelOrder(
   nonce: number,
   params: {
     sessionId: BigIntValue;
+    senderId?: number;
     orderId: BigIntValue;
     liquidateeId?: number;
   },

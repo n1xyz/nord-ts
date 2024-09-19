@@ -56,7 +56,13 @@ export function optMap<T, U>(
 ): U | undefined {
   return value !== undefined ? mapFn(value) : undefined;
 }
-
+/** Behaves same as `node-fetch/fetch` but throws if response is a failure
+ *
+ * @param url   Request HTTP URL
+ * @param init  Request parameters
+ * @returns     Raw response if fetch succeeded
+ * @throws      If response wasn't Ok
+ */
 export async function checkedFetch(
   url: RequestInfo,
   init?: RequestInit,

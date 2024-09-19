@@ -4,6 +4,7 @@ import { DEFAULT_FUNDING_AMOUNTS, FAUCET_PRIVATE_ADDRESS } from "../const";
 import {
   assert,
   BigIntValue,
+  checkedFetch,
   findMarket,
   findToken,
   optExpect,
@@ -27,12 +28,24 @@ export class NordUser {
   sessionSignFn: (message: Uint8Array) => Promise<Uint8Array>;
   balances: { [string: string]: number } = {};
   orders: Order[] = [];
-  userId?: number;
+  accountId?: number;
   sessionId?: bigint;
 
   publicKey: Uint8Array | undefined;
   lastTs = 0;
   lastNonce = 0;
+
+  constructor(params: {
+    nord: Nord;
+    address: string;
+    walletSignFn: (message: Uint8Array | string) => Promise<string>;
+    sessionSignFn: (message: Uint8Array) => Promise<Uint8Array>;
+  }) {
+    this.nord = params.nord;
+    this.address = params.address;
+    this.walletSignFn = params.walletSignFn;
+    this.sessionSignFn = params.sessionSignFn;
+  }
 
   clone(): NordUser {
     const newUser = new NordUser({
@@ -40,12 +53,12 @@ export class NordUser {
       address: this.address,
       walletSignFn: this.walletSignFn,
       sessionSignFn: this.sessionSignFn,
-      userId: this.userId,
-      sessionId: this.sessionId,
     });
     newUser.publicKey = this.publicKey;
     newUser.lastTs = this.lastTs;
     newUser.lastNonce = this.lastNonce;
+    newUser.accountId = this.accountId;
+    newUser.sessionId = this.sessionId;
     return newUser;
   }
 
@@ -64,38 +77,18 @@ export class NordUser {
     return this.lastNonce;
   }
 
-  constructor(params: {
-    nord: Nord;
-    address: string;
-    walletSignFn: (message: Uint8Array | string) => Promise<string>;
-    sessionSignFn: (message: Uint8Array) => Promise<Uint8Array>;
-    userId?: number;
-    sessionId?: bigint;
-  }) {
-    this.nord = params.nord;
-    this.address = params.address;
-    this.walletSignFn = params.walletSignFn;
-    this.sessionSignFn = params.sessionSignFn;
-    this.userId = params.userId;
-    this.sessionId = params.sessionId;
-  }
-
-  async updateUserId() {
+  async updateAccountId() {
     const hexPubkey = ethers
       .hexlify(optExpect(this.publicKey, "No user public key"))
       .slice(2);
-    const userId = await (
-      await fetch(this.nord.webServerUrl + "/user_id?pubkey=" + hexPubkey)
+    const accountIds_ = await (
+      await checkedFetch(
+        `${this.nord.webServerUrl}/user_account_ids?pubkey=${hexPubkey}`,
+      )
     ).json();
-    if (typeof userId !== "number") {
-      this.userId = undefined;
-      if (typeof userId === "object" && userId !== null && "error" in userId) {
-        throw new Error(`Could not fetch user id: ${userId.error ?? null}`);
-      } else {
-        throw new Error(`Unknown error: ${userId}`);
-      }
-    }
-    this.userId = userId;
+    assert(Array.isArray(accountIds_), "Unexpected response");
+    const accountIds = accountIds_ as Array<number>;
+    this.accountId = accountIds[0];
   }
 
   async fetchInfo() {
@@ -118,10 +111,12 @@ export class NordUser {
       balances: Balance[];
     }
 
-    if (this.userId !== undefined) {
+    if (this.accountId !== undefined) {
       // todo:implement class
       const data_ = await (
-        await fetch(this.nord.webServerUrl + "/user?user_id=" + this.userId)
+        await fetch(
+          `${this.nord.webServerUrl}/account?account_id=${this.accountId}`,
+        )
       ).json();
       if (typeof data_ !== "object" || data_ === null) {
         throw new Error(`Unknown data returned: ${data_}`);
@@ -200,7 +195,7 @@ export class NordUser {
       this.walletSignFn,
       this.getNonce(),
       {
-        userId: optExpect(this.userId, "No user"),
+        userPubkey: optExpect(this.publicKey, "No user's public key"),
         sessionPubkey: sessionPk,
       },
     );
