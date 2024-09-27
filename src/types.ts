@@ -109,17 +109,17 @@ export interface OrderInfo {
   reduce_only: boolean;
   imit_price: number;
   size: number;
-  user_id: number;
+  account_id: number;
 }
 
 interface HashMap<T> {
   [key: number]: T;
 }
 
-export interface User {
+export interface Account {
   last_update_id: number;
   update_id: number;
-  user_id: number;
+  account_id: number;
   fills: HashMap<FillMode>;
   places: HashMap<OrderInfo>;
   cancels: HashMap<OrderInfo>;

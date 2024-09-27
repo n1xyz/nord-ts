@@ -23,7 +23,7 @@ import {
   type SubscriberConfig,
   type Token,
   type Trades,
-  type User,
+  type Account,
 } from "../types";
 import { checkedFetch, decodeLengthDelimited, MAX_BUFFER_LEN } from "../utils";
 import {
@@ -350,7 +350,7 @@ export class Nord {
 
 export class Subscriber {
   streamURL: string;
-  buffer: (DeltaEvent | Trades | User)[];
+  buffer: (DeltaEvent | Trades | Account)[];
   maxBufferLen: number;
 
   constructor(config: SubscriberConfig) {
@@ -366,7 +366,7 @@ export class Subscriber {
 
     ws.on("message", (rawData) => {
       const message: string = rawData.toLocaleString();
-      const event: DeltaEvent | Trades | User = JSON.parse(message);
+      const event: DeltaEvent | Trades | Account = JSON.parse(message);
       this.buffer.push(event);
       if (this.buffer.length > this.maxBufferLen) {
         this.buffer.shift();
