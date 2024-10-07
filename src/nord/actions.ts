@@ -8,7 +8,6 @@ import {
   checkPubKeyLength,
   decodeLengthDelimited,
   encodeLengthDelimited,
-  getCurrentTimestamp,
   optMap,
   SESSION_TTL,
   toScaledU128,
@@ -74,39 +73,39 @@ async function sendAction(
 async function createSessionImpl(
   sendFn: (encoded: Uint8Array) => Promise<Uint8Array>,
   walletSignFn: (message: string | Uint8Array) => Promise<string>,
+  currentTimestamp: bigint,
   nonce: number,
   params: {
     userPubkey: Uint8Array;
     sessionPubkey: Uint8Array;
     // If not specified, set to current moment plus default session TTL
-    expiryTimestamp?: number;
+    expiryTimestamp?: bigint;
   },
 ): Promise<bigint> {
   checkPubKeyLength(KeyType.Secp256k1, params.userPubkey.length);
   checkPubKeyLength(KeyType.Ed25519, params.sessionPubkey.length);
 
-  const now = getCurrentTimestamp();
-  let expiry = 0;
+  let expiry = 0n;
 
   if (params.expiryTimestamp !== undefined) {
-    expiry = params.expiryTimestamp as number;
+    expiry = params.expiryTimestamp;
     assert(
-      expiry > Math.ceil(Date.now() / 1000),
+      expiry > currentTimestamp,
       "Cannot set expiry timestamp in the past",
     );
   } else {
-    expiry = now + SESSION_TTL;
+    expiry = currentTimestamp + SESSION_TTL;
   }
 
   const action: proto.Action = {
-    currentTimestamp: BigInt(now),
+    currentTimestamp,
     nonce,
     kind: {
       $case: "createSession",
       value: {
         userPubkey: params.userPubkey,
         blstPubkey: params.sessionPubkey,
-        expiryTimestamp: BigInt(expiry),
+        expiryTimestamp: expiry,
       },
     },
   };
@@ -128,17 +127,19 @@ async function createSessionImpl(
 export async function createSession(
   serverUrl: string,
   walletSignFn: (message: string | Uint8Array) => Promise<string>,
+  currentTimestamp: bigint,
   nonce: number,
   params: {
     userPubkey: Uint8Array;
     sessionPubkey: Uint8Array;
     // If not specified, set to current moment plus default session TTL
-    expiryTimestamp?: number;
+    expiryTimestamp?: bigint;
   },
 ): Promise<bigint> {
   return createSessionImpl(
     makeSendHttp(serverUrl),
     walletSignFn,
+    currentTimestamp,
     nonce,
     params,
   );
@@ -147,13 +148,14 @@ export async function createSession(
 async function revokeSessionImpl(
   sendFn: (encoded: Uint8Array) => Promise<Uint8Array>,
   walletSignFn: (message: string | Uint8Array) => Promise<string>,
+  currentTimestamp: bigint,
   nonce: number,
   params: {
     sessionId: BigIntValue;
   },
 ): Promise<void> {
   const action: proto.Action = {
-    currentTimestamp: BigInt(getCurrentTimestamp()),
+    currentTimestamp,
     nonce,
     kind: {
       $case: "revokeSession",
@@ -174,6 +176,7 @@ async function revokeSessionImpl(
 export async function revokeSession(
   serverUrl: string,
   walletSignFn: (message: string | Uint8Array) => Promise<string>,
+  currentTimestamp: bigint,
   nonce: number,
   params: {
     sessionId: BigIntValue;
@@ -182,6 +185,7 @@ export async function revokeSession(
   return revokeSessionImpl(
     makeSendHttp(serverUrl),
     walletSignFn,
+    currentTimestamp,
     nonce,
     params,
   );
@@ -190,6 +194,7 @@ export async function revokeSession(
 async function withdrawImpl(
   sendFn: (encoded: Uint8Array) => Promise<Uint8Array>,
   signFn: (message: Uint8Array) => Promise<Uint8Array>,
+  currentTimestamp: bigint,
   nonce: number,
   params: {
     sizeDecimals: number;
@@ -205,7 +210,7 @@ async function withdrawImpl(
   }
 
   const action: proto.Action = {
-    currentTimestamp: BigInt(getCurrentTimestamp()),
+    currentTimestamp,
     nonce,
     kind: {
       $case: "withdraw",
@@ -223,6 +228,7 @@ async function withdrawImpl(
 export async function withdraw(
   serverUrl: string,
   signFn: (message: Uint8Array) => Promise<Uint8Array>,
+  currentTimestamp: bigint,
   nonce: number,
   params: {
     sizeDecimals: number;
@@ -231,12 +237,19 @@ export async function withdraw(
     amount: number;
   },
 ): Promise<void> {
-  return withdrawImpl(makeSendHttp(serverUrl), signFn, nonce, params);
+  return withdrawImpl(
+    makeSendHttp(serverUrl),
+    signFn,
+    currentTimestamp,
+    nonce,
+    params,
+  );
 }
 
 async function placeOrderImpl(
   sendFn: (encoded: Uint8Array) => Promise<Uint8Array>,
   signFn: (message: Uint8Array) => Promise<Uint8Array>,
+  currentTimestamp: bigint,
   nonce: number,
   params: {
     sessionId: BigIntValue;
@@ -264,7 +277,7 @@ async function placeOrderImpl(
 
   // Compose action object
   const action: proto.Action = {
-    currentTimestamp: BigInt(getCurrentTimestamp()),
+    currentTimestamp,
     nonce,
     kind: {
       $case: "placeOrder",
@@ -301,6 +314,7 @@ async function placeOrderImpl(
 export async function placeOrder(
   serverUrl: string,
   signFn: (message: Uint8Array) => Promise<Uint8Array>,
+  currentTimestamp: bigint,
   nonce: number,
   params: {
     sessionId: BigIntValue;
@@ -318,12 +332,19 @@ export async function placeOrder(
     clientOrderId?: BigIntValue;
   },
 ): Promise<bigint | undefined> {
-  return placeOrderImpl(makeSendHttp(serverUrl), signFn, nonce, params);
+  return placeOrderImpl(
+    makeSendHttp(serverUrl),
+    signFn,
+    currentTimestamp,
+    nonce,
+    params,
+  );
 }
 
 async function cancelOrderImpl(
   sendFn: (encoded: Uint8Array) => Promise<Uint8Array>,
   signFn: (message: Uint8Array) => Promise<Uint8Array>,
+  currentTimestamp: bigint,
   nonce: number,
   params: {
     sessionId: BigIntValue;
@@ -333,7 +354,7 @@ async function cancelOrderImpl(
   },
 ): Promise<bigint> {
   const action: proto.Action = {
-    currentTimestamp: BigInt(getCurrentTimestamp()),
+    currentTimestamp,
     nonce: nonce,
     kind: {
       $case: "cancelOrderById",
@@ -363,6 +384,7 @@ async function cancelOrderImpl(
 export async function cancelOrder(
   serverUrl: string,
   signFn: (message: Uint8Array) => Promise<Uint8Array>,
+  currentTimestamp: bigint,
   nonce: number,
   params: {
     sessionId: BigIntValue;
@@ -371,7 +393,83 @@ export async function cancelOrder(
     liquidateeId?: number;
   },
 ): Promise<bigint> {
-  return cancelOrderImpl(makeSendHttp(serverUrl), signFn, nonce, params);
+  return cancelOrderImpl(
+    makeSendHttp(serverUrl),
+    signFn,
+    currentTimestamp,
+    nonce,
+    params,
+  );
+}
+
+async function transferImpl(
+  sendFn: (encoded: Uint8Array) => Promise<Uint8Array>,
+  signFn: (message: Uint8Array) => Promise<Uint8Array>,
+  currentTimestamp: bigint,
+  nonce: number,
+  params: {
+    sessionId: BigIntValue;
+    fromAccountId: number;
+    toAccountId?: number;
+    tokenId: number;
+    tokenDecimals: number;
+    amount: Decimal.Value;
+  },
+): Promise<number | undefined> {
+  const action: proto.Action = {
+    currentTimestamp,
+    nonce: nonce,
+    kind: {
+      $case: "transfer",
+      value: {
+        sessionId: BigInt(params.sessionId),
+        fromAccountId: params.fromAccountId,
+        toAccountId: params.toAccountId,
+        tokenId: params.tokenId,
+        amount: toScaledU64(params.amount ?? 0, params.tokenDecimals),
+      },
+    },
+  };
+
+  const resp = await sendAction(
+    sendFn,
+    (m) => sessionSign(signFn, m),
+    action,
+    "transfer asset to other account",
+  );
+
+  if (resp.kind?.$case === "transferred") {
+    if (resp.kind.value.accountCreated) {
+      return resp.kind.value.toAccountId;
+    } else {
+      return undefined;
+    }
+  } else {
+    throw new Error(`Unexpected receipt kind ${resp.kind?.$case}`);
+  }
+}
+
+export async function transfer(
+  serverUrl: string,
+  signFn: (message: Uint8Array) => Promise<Uint8Array>,
+  currentTimestamp: bigint,
+  nonce: number,
+  params: {
+    sessionId: BigIntValue;
+    fromAccountId: number;
+    toAccountId?: number;
+    tokenId: number;
+    tokenDecimals: number;
+    amount: Decimal.Value;
+  },
+): Promise<number | undefined> {
+  return transferImpl(
+    makeSendHttp(serverUrl),
+    signFn,
+    currentTimestamp,
+    nonce,
+    params,
+  );
 }
 /**
  * For testing purposes
@@ -382,4 +480,5 @@ export const _private = {
   withdrawImpl,
   placeOrderImpl,
   cancelOrderImpl,
+  transferImpl,
 };

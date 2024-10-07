@@ -10,7 +10,7 @@ import { ethers } from "ethers";
 import fetch from "node-fetch";
 import { RequestInfo, RequestInit, Response } from "node-fetch";
 
-export const SESSION_TTL = 10 * 60 * 1000 * 10000;
+export const SESSION_TTL: bigint = 10n * 60n * 1000n * 10000n;
 export const ZERO_DECIMAL = new Decimal(0);
 export const MAX_BUFFER_LEN = 10_000;
 
@@ -146,7 +146,7 @@ function makeToScaledBigUint(params: {
       );
     }
 
-    if (scaled > Max) {
+    if (scaled.greaterThan(Max)) {
       throw new Error(
         `Integer is out of range: ${scaled} exceeds limit ${Max}`,
       );
@@ -283,14 +283,6 @@ export function checkPubKeyLength(keyType: KeyType, len: number): void {
   if (len !== 33 && keyType === KeyType.Secp256k1) {
     throw new Error("Secp256k1 pubkeys must be 33 length.");
   }
-}
-
-/**
- * Retrieves the current timestamp.
- * @returns Current timestamp as a bigint.
- */
-export function getCurrentTimestamp(): number {
-  return Math.floor(Date.now() / 1000);
 }
 
 export function findMarket(markets: Market[], marketId: number): Market {

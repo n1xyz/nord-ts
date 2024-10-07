@@ -15,6 +15,7 @@ import {
   createSession,
   placeOrder,
   revokeSession,
+  transfer,
   withdraw,
 } from "./actions";
 import { FillMode, Order, Side } from "../types";
@@ -113,18 +114,11 @@ export class NordUser {
 
     if (this.accountId !== undefined) {
       // todo:implement class
-      const data_ = await (
-        await fetch(
+      const data = (await (
+        await checkedFetch(
           `${this.nord.webServerUrl}/account?account_id=${this.accountId}`,
         )
-      ).json();
-      if (typeof data_ !== "object" || data_ === null) {
-        throw new Error(`Unknown data returned: ${data_}`);
-      }
-      if ("error" in data_) {
-        throw new Error(`Failed to fetch user info: ${data_.error}`);
-      }
-      const data = data_ as Account;
+      ).json()) as Account;
       for (const balance of data.balances) {
         this.balances[balance.token] = balance.amount;
       }
@@ -193,6 +187,7 @@ export class NordUser {
     this.sessionId = await createSession(
       this.nord.webServerUrl,
       this.walletSignFn,
+      this.nord.impl.getTimestamp(),
       this.getNonce(),
       {
         userPubkey: optExpect(this.publicKey, "No user's public key"),
@@ -209,6 +204,7 @@ export class NordUser {
     return revokeSession(
       this.nord.webServerUrl,
       this.walletSignFn,
+      this.nord.impl.getTimestamp(),
       this.getNonce(),
       {
         sessionId,
@@ -327,12 +323,18 @@ export class NordUser {
   }
 
   async withdraw(tokenId: number, amount: number): Promise<void> {
-    withdraw(this.nord.webServerUrl, this.sessionSignFn, this.getNonce(), {
-      sizeDecimals: findToken(this.nord.tokens, tokenId).decimals,
-      sessionId: optExpect(this.sessionId, "No session"),
-      tokenId: tokenId,
-      amount,
-    });
+    withdraw(
+      this.nord.webServerUrl,
+      this.sessionSignFn,
+      this.nord.impl.getTimestamp(),
+      this.getNonce(),
+      {
+        sizeDecimals: findToken(this.nord.tokens, tokenId).decimals,
+        sessionId: optExpect(this.sessionId, "No session"),
+        tokenId: tokenId,
+        amount,
+      },
+    );
   }
 
   async placeOrder(params: {
@@ -349,9 +351,11 @@ export class NordUser {
     return placeOrder(
       this.nord.webServerUrl,
       this.sessionSignFn,
+      this.nord.impl.getTimestamp(),
       this.getNonce(),
       {
         sessionId: optExpect(this.sessionId, "No session"),
+        senderId: this.accountId,
         sizeDecimals: market.sizeDecimals,
         priceDecimals: market.priceDecimals,
         marketId: params.marketId,
@@ -369,11 +373,69 @@ export class NordUser {
     return cancelOrder(
       this.nord.webServerUrl,
       this.sessionSignFn,
+      this.nord.impl.getTimestamp(),
       this.getNonce(),
       {
         sessionId: optExpect(this.sessionId, "No session"),
+        senderId: this.accountId,
         orderId,
       },
     );
+  }
+
+  async transferToAccount(params: {
+    to: NordUser;
+    tokenId: number;
+    amount: Decimal.Value;
+  }): Promise<void> {
+    const token = findToken(this.nord.tokens, params.tokenId);
+
+    await transfer(
+      this.nord.webServerUrl,
+      this.sessionSignFn,
+      this.nord.impl.getTimestamp(),
+      this.getNonce(),
+      {
+        sessionId: optExpect(this.sessionId, "No session"),
+        fromAccountId: optExpect(this.accountId, "No source account"),
+        toAccountId: optExpect(params.to.accountId, "No target account"),
+        tokenId: params.tokenId,
+        tokenDecimals: token.decimals,
+        amount: params.amount,
+      },
+    );
+  }
+
+  async createAccount(params: {
+    tokenId: number;
+    amount: Decimal.Value;
+  }): Promise<NordUser> {
+    const token = findToken(this.nord.tokens, params.tokenId);
+
+    const maybeToAccountId = await transfer(
+      this.nord.webServerUrl,
+      this.sessionSignFn,
+      this.nord.impl.getTimestamp(),
+      this.getNonce(),
+      {
+        sessionId: optExpect(this.sessionId, "No session"),
+        fromAccountId: optExpect(this.accountId, "No source account"),
+        toAccountId: undefined,
+        tokenId: params.tokenId,
+        tokenDecimals: token.decimals,
+        amount: params.amount,
+      },
+    );
+
+    const toAccountId = optExpect(
+      maybeToAccountId,
+      "New account should have been created",
+    );
+
+    const newUser = this.clone();
+    newUser.accountId = toAccountId;
+    await newUser.fetchInfo();
+
+    return newUser;
   }
 }
