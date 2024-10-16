@@ -1,6 +1,6 @@
 {
   "name": "@layer-n/nord-ts",
-  "version": "0.0.44",
+  "version": "0.0.45",
   "description": "Typescript for Nord",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

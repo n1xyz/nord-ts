@@ -27,9 +27,11 @@ export class NordUser {
   address: string;
   walletSignFn: (message: Uint8Array | string) => Promise<string>;
   sessionSignFn: (message: Uint8Array) => Promise<Uint8Array>;
-  balances: { [string: string]: number } = {};
-  orders: Order[] = [];
-  accountId?: number;
+  balances: {
+    [key: string]: { accountId: number; balance: number; symbol: string }[];
+  } = {};
+  orders: { [key: string]: Order[] } = {};
+  accountIds?: number[];
   sessionId?: bigint;
 
   publicKey: Uint8Array | undefined;
@@ -58,7 +60,7 @@ export class NordUser {
     newUser.publicKey = this.publicKey;
     newUser.lastTs = this.lastTs;
     newUser.lastNonce = this.lastNonce;
-    newUser.accountId = this.accountId;
+    newUser.accountIds = this.accountIds;
     newUser.sessionId = this.sessionId;
     return newUser;
   }
@@ -89,7 +91,7 @@ export class NordUser {
     ).json();
     assert(Array.isArray(accountIds_), "Unexpected response");
     const accountIds = accountIds_ as Array<number>;
-    this.accountId = accountIds[0];
+    this.accountIds = accountIds;
   }
 
   async fetchInfo() {
@@ -110,27 +112,51 @@ export class NordUser {
     interface Account {
       orders: FetchOrder[];
       balances: Balance[];
+      accountId: number;
     }
 
-    if (this.accountId !== undefined) {
+    if (this.accountIds !== undefined) {
       // todo:implement class
-      const data = (await (
-        await checkedFetch(
-          `${this.nord.webServerUrl}/account?account_id=${this.accountId}`,
-        )
-      ).json()) as Account;
-      for (const balance of data.balances) {
-        this.balances[balance.token] = balance.amount;
+      const accountsData = await Promise.all(
+        this.accountIds.map(async (accountId) => {
+          const response = await checkedFetch(
+            `${this.nord.webServerUrl}/account?account_id=${accountId}`,
+          );
+          return {
+            accountId,
+            ...((await response.json()) as Promise<Account>),
+          };
+        }),
+      );
+
+      for (const accountData of accountsData) {
+        this.balances[accountData.accountId] = [];
+        for (const balance of accountData.balances) {
+          this.balances[accountData.accountId].push({
+            accountId: accountData.accountId,
+            balance: balance.amount,
+            symbol: balance.token,
+          });
+        }
+
+        this.orders[accountData.accountId] = accountData.orders.map(
+          (order: {
+            orderId: number;
+            side: string;
+            size: number;
+            price: number;
+            marketId: number;
+          }) => {
+            return {
+              orderId: order.orderId,
+              isLong: order.side === "bid",
+              size: order.size,
+              price: order.price,
+              marketId: order.marketId,
+            };
+          },
+        );
       }
-      this.orders = data.orders.map((order) => {
-        return {
-          orderId: order.orderId,
-          isLong: order.side === "bid",
-          size: order.size,
-          price: order.price,
-          marketId: order.marketId,
-        };
-      });
     }
   }
 
@@ -345,6 +371,7 @@ export class NordUser {
     size?: Decimal.Value;
     price?: Decimal.Value;
     quoteSize?: Decimal.Value;
+    accountId?: number;
   }): Promise<bigint | undefined> {
     const market = findMarket(this.nord.markets, params.marketId);
 
@@ -355,7 +382,7 @@ export class NordUser {
       this.getNonce(),
       {
         sessionId: optExpect(this.sessionId, "No session"),
-        senderId: this.accountId,
+        senderId: params.accountId,
         sizeDecimals: market.sizeDecimals,
         priceDecimals: market.priceDecimals,
         marketId: params.marketId,
@@ -369,7 +396,7 @@ export class NordUser {
     );
   }
 
-  async cancelOrder(orderId: BigIntValue): Promise<bigint> {
+  async cancelOrder(orderId: BigIntValue, accountId: number): Promise<bigint> {
     return cancelOrder(
       this.nord.webServerUrl,
       this.sessionSignFn,
@@ -377,7 +404,7 @@ export class NordUser {
       this.getNonce(),
       {
         sessionId: optExpect(this.sessionId, "No session"),
-        senderId: this.accountId,
+        senderId: accountId,
         orderId,
       },
     );
@@ -387,6 +414,8 @@ export class NordUser {
     to: NordUser;
     tokenId: number;
     amount: Decimal.Value;
+    fromAccountId: number;
+    toAccountId: number;
   }): Promise<void> {
     const token = findToken(this.nord.tokens, params.tokenId);
 
@@ -397,8 +426,8 @@ export class NordUser {
       this.getNonce(),
       {
         sessionId: optExpect(this.sessionId, "No session"),
-        fromAccountId: optExpect(this.accountId, "No source account"),
-        toAccountId: optExpect(params.to.accountId, "No target account"),
+        fromAccountId: optExpect(params.fromAccountId, "No source account"),
+        toAccountId: optExpect(params.toAccountId, "No target account"),
         tokenId: params.tokenId,
         tokenDecimals: token.decimals,
         amount: params.amount,
@@ -419,7 +448,7 @@ export class NordUser {
       this.getNonce(),
       {
         sessionId: optExpect(this.sessionId, "No session"),
-        fromAccountId: optExpect(this.accountId, "No source account"),
+        fromAccountId: optExpect(this.accountIds?.[0], "No source account"),
         toAccountId: undefined,
         tokenId: params.tokenId,
         tokenDecimals: token.decimals,
@@ -431,9 +460,8 @@ export class NordUser {
       maybeToAccountId,
       "New account should have been created",
     );
-
     const newUser = this.clone();
-    newUser.accountId = toAccountId;
+    newUser.accountIds?.push(toAccountId);
     await newUser.fetchInfo();
 
     return newUser;
