@@ -172,7 +172,10 @@ export class Nord {
     for (const rollmanAction of rollmanResponse.actions) {
       const blockAction: ActionInfo = {
         action_id: rollmanAction.action_id,
-        action: decodeLengthDelimited(rollmanAction.action_pb, proto.Action),
+        action: decodeLengthDelimited(
+          new Uint8Array(rollmanAction.action_pb),
+          proto.Action,
+        ),
       };
       queryResponse.actions.push(blockAction);
     }
