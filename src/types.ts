@@ -211,10 +211,12 @@ export interface BlockSummary {
  * Info about the block transaction.
  * @field {number} action_id is the action identifier.
  * @field {Action} action in protobuf format.
+ * @field {number} exec_timestamp is the execution timestamp.
  */
 export interface ActionInfo {
   action_id: number;
   action: proto.Action;
+  exec_timestamp: number;
 }
 
 /**
@@ -256,6 +258,7 @@ export interface RollmanBlockResponse {
 export interface RollmanActionResponse {
   block_number?: number;
   action_pb: Uint8Array;
+  exec_timestamp: number;
 }
 
 export interface RollmanActionsResponse {
@@ -265,6 +268,7 @@ export interface RollmanActionsResponse {
 export interface RollmanActionInfo {
   action_id: number;
   action_pb: Uint8Array;
+  exec_timestamp: number;
 }
 
 export interface RollmanActionExtendedInfo {

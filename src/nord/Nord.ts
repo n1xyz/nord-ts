@@ -184,6 +184,7 @@ export class Nord {
           new Uint8Array(rollmanAction.action_pb),
           proto.Action,
         ),
+        exec_timestamp: rollmanAction.exec_timestamp,
       };
       queryResponse.actions.push(blockAction);
     }
@@ -203,6 +204,7 @@ export class Nord {
       const blockAction: ActionInfo = {
         action_id: rollmanAction.action_id,
         action: decodeLengthDelimited(rollmanAction.action_pb, proto.Action),
+        exec_timestamp: rollmanAction.exec_timestamp,
       };
       queryResponse.actions.push(blockAction);
     }
