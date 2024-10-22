@@ -34,7 +34,7 @@ import {
 } from "../const";
 import { ERC20_ABI, NORD_RAMP_FACET_ABI } from "../abis";
 import * as proto from "../gen/nord";
-import { DefaultNordImpl, NordImpl } from "./NordImpl";
+import { NordImpl } from "./NordImpl";
 
 export async function depositOnlyTx(
   privateAddress: string,
@@ -89,8 +89,15 @@ export async function depositOnlyTxRaw(
   return JSON.stringify(depositTx);
 }
 
+function makeNordImpl(nord: Nord): NordImpl {
+  return {
+    getTimestamp: (): Promise<bigint> =>
+      nord.getTimestamp().then((x) => x + 1n),
+  };
+}
+
 export class Nord {
-  impl: NordImpl = DefaultNordImpl;
+  impl: NordImpl;
   evmUrl: string;
   webServerUrl: string;
   contractAddress: string;
@@ -104,6 +111,7 @@ export class Nord {
     tokenInfos,
     contractAddress,
   }: NordConfig) {
+    this.impl = makeNordImpl(this);
     this.evmUrl = evmUrl;
     this.webServerUrl = webServerUrl;
     this.tokenInfos = tokenInfos;

@@ -213,7 +213,7 @@ export class NordUser {
     this.sessionId = await createSession(
       this.nord.webServerUrl,
       this.walletSignFn,
-      this.nord.impl.getTimestamp(),
+      await this.nord.impl.getTimestamp(),
       this.getNonce(),
       {
         userPubkey: optExpect(this.publicKey, "No user's public key"),
@@ -230,7 +230,7 @@ export class NordUser {
     return revokeSession(
       this.nord.webServerUrl,
       this.walletSignFn,
-      this.nord.impl.getTimestamp(),
+      await this.nord.impl.getTimestamp(),
       this.getNonce(),
       {
         sessionId,
@@ -352,7 +352,7 @@ export class NordUser {
     withdraw(
       this.nord.webServerUrl,
       this.sessionSignFn,
-      this.nord.impl.getTimestamp(),
+      await this.nord.impl.getTimestamp(),
       this.getNonce(),
       {
         sizeDecimals: findToken(this.nord.tokens, tokenId).decimals,
@@ -378,7 +378,7 @@ export class NordUser {
     return placeOrder(
       this.nord.webServerUrl,
       this.sessionSignFn,
-      this.nord.impl.getTimestamp(),
+      await this.nord.impl.getTimestamp(),
       this.getNonce(),
       {
         sessionId: optExpect(this.sessionId, "No session"),
@@ -400,7 +400,7 @@ export class NordUser {
     return cancelOrder(
       this.nord.webServerUrl,
       this.sessionSignFn,
-      this.nord.impl.getTimestamp(),
+      await this.nord.impl.getTimestamp(),
       this.getNonce(),
       {
         sessionId: optExpect(this.sessionId, "No session"),
@@ -422,7 +422,7 @@ export class NordUser {
     await transfer(
       this.nord.webServerUrl,
       this.sessionSignFn,
-      this.nord.impl.getTimestamp(),
+      await this.nord.impl.getTimestamp(),
       this.getNonce(),
       {
         sessionId: optExpect(this.sessionId, "No session"),
@@ -444,7 +444,7 @@ export class NordUser {
     const maybeToAccountId = await transfer(
       this.nord.webServerUrl,
       this.sessionSignFn,
-      this.nord.impl.getTimestamp(),
+      await this.nord.impl.getTimestamp(),
       this.getNonce(),
       {
         sessionId: optExpect(this.sessionId, "No session"),

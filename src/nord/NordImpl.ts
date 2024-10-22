@@ -4,11 +4,5 @@
  */
 
 export interface NordImpl {
-  getTimestamp: () => bigint;
+  getTimestamp: () => Promise<bigint>;
 }
-
-export const DefaultNordImpl: NordImpl = {
-  getTimestamp: (): bigint => {
-    return BigInt(Math.floor(Date.now() / 1000));
-  },
-};
