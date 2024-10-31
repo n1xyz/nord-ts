@@ -283,7 +283,7 @@ export interface MarketsStatsResponse {
 
 export interface MarketStats {
   market_id: number;
-  index_price: number;
+  index_price: [number, number];
   volume_24h: number;
   high_24h: number;
   low_24h: number;
