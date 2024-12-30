@@ -2,6 +2,7 @@
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 PROTO_PATH="${SCRIPT_DIR}/../engine/nord.proto"
+PROTO_INCLUE_PATH="${SCRIPT_DIR}/.."
 PLUGIN_PATH="${SCRIPT_DIR}/node_modules/.bin/protoc-gen-ts_proto"
 OUT_DIR="${SCRIPT_DIR}/src/gen"
 
@@ -18,4 +19,5 @@ protoc \
     --ts_proto_opt=unrecognizedEnum=false \
     --ts_proto_out="${OUT_DIR}" \
     --proto_path="$(dirname "${PROTO_PATH}")" \
+    --proto_path="${PROTO_INCLUE_PATH}" \
     "${PROTO_PATH}"
