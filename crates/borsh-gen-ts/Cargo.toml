@@ -1,0 +1,11 @@
+[package]
+name = "borsh-gen-ts"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+engine.workspace = true
+borsh.workspace = true
+ordermap = "0.5.4"
+syn = "2.0.91"
+displaydoc.workspace = true
