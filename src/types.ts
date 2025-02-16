@@ -287,6 +287,10 @@ export interface MarketStats {
   volume_24h: number;
   high_24h: number;
   low_24h: number;
+  perp_stats?: PerpMarketStats;
+}
+
+export interface PerpMarketStats {
   mark_price?: number;
   funding_rate?: number;
   next_funding_time?: Date;
