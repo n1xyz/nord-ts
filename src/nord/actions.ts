@@ -440,7 +440,7 @@ async function transferImpl(
 
   if (resp.kind?.$case === "transferred") {
     if (resp.kind.value.accountCreated) {
-      return resp.kind.value.toAccountId;
+      return resp.kind.value.toUserAccount;
     } else {
       return undefined;
     }
