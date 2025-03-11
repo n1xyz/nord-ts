@@ -1,110 +1,193 @@
 # nord-ts
 
-This package provides an interface to interact with the Nord exchange. Functionality includes generating Action messages, signing with `Ed25119` and sending payloads. There are also various util functions and interfaces provided.
+This package provides an interface to interact with the Nord exchange. The core components are `Nord` and `NordUser` classes which enable market data access, trading operations, and account management.
 
 ## Installation
 
-### npm
-
 ```bash
+# npm
 npm install nord-ts
-```
 
-### yarn
-
-```bash
+# yarn
 yarn add nord-ts
 ```
 
-## Features
+## Key Components
 
-- create a new client with a new user and a new session ( `createClient` )
-- generate Action messages ( `deposit` | `withdraw` | `placeOrder` | `cancelOrderById` )
-- Cryptographic support for `Ed25119` key types.
-- Message signing and transmission capabilities.
-- Data serialization and deserialization for protobuf.
+### Nord
 
-## Usage
+The `Nord` class is the main entry point for interacting with the Nord exchange:
 
-### Basic Examples
+- Provides market data access (orderbooks, trades, etc.)
+- Manages WebSocket connections for real-time updates
+- Offers utility methods for timestamp and nonce generation
 
-#### Client
+### NordUser
+
+The `NordUser` class represents a user account on the Nord exchange:
+
+- Handles authentication and session management
+- Provides trading functionality (place/cancel orders)
+- Manages deposits and withdrawals
+- Tracks user balances, positions, and orders
+
+## Usage Examples
+
+### Initializing Nord
 
 ```typescript
-import { Nord, types } from "nord-ts";
+import { Nord } from "nord-ts";
 
-const c = await Nord.createClient({
-  url: 'http://localhost:3000',
-  privateKey: /* secp256k1 sec1 compressed secret key */,
+// Create a Nord instance
+const nord = new Nord({
+  webServerUrl: 'https://api.nord.exchange',
+  solanaProgramId: 'your_solana_program_id',
+  solanaUrl: 'https://api.mainnet-beta.solana.com',
 });
 
-const tokenId = 0;
-try {
-    await c.deposit(tokenId, 10000000);
-} catch (e) {
-    console.log(`couldn't do deposit, reason: ${e}`)
-}
+// Initialize and fetch market data
+await nord.fetchNordInfo();
+```
 
-try {
-    await c.withdraw(tokenId, 100);
-} catch (e) {
-    console.log(`couldn't do withdraw, reason: ${e}`)
-}
+### Creating a User from Private Key
 
-const marketId = 0;
-const size = 1;
-const price = 1;
-const isReduceOnly = false;
-let orderID: number = 0;
-try {
-    orderId = await c.placeOrder(
-        marketId,
-        Side.Ask,
-        FillMode.Limit,
-        isReduceOnly,
-        size,
-        price
-    );
-} catch (e) {
-    console.log(`couldn't do placeOrder, reason: ${e}`)
-}
+```typescript
+import { Nord, NordUser } from "nord-ts";
+import { Connection } from "@solana/web3.js";
 
+// Create Nord instance
+const nord = new Nord({
+  webServerUrl: 'https://api.nord.exchange',
+  solanaProgramId: 'your_solana_program_id',
+  solanaUrl: 'https://api.mainnet-beta.solana.com',
+});
+
+// Optional Solana connection
+const connection = new Connection('https://api.mainnet-beta.solana.com');
+
+// Create user from private key
+const user = NordUser.fromPrivateKey(
+  nord,
+  'your_private_key', // Can be string or Uint8Array
+  connection // Optional
+);
+
+// Fetch user account information
+await user.updateAccountId();
+await user.fetchInfo();
+```
+
+### Trading Operations
+
+```typescript
+import { Nord, NordUser, Side, FillMode } from "nord-ts";
+
+// Assuming nord and user are already initialized
+
+// Place a limit order
 try {
-    await c.cancelOrder(
-        marketId,
-        orderId
-    );
-} catch (e) {
-    console.log(`couldn't do cancelOrder, reason: ${e}`)
+  const orderId = await user.placeOrder({
+    marketId: 0, // BTC/USDC market
+    side: Side.Bid, // Buy
+    fillMode: FillMode.Limit,
+    isReduceOnly: false,
+    size: 0.1, // 0.1 BTC
+    price: 50000, // $50,000 per BTC
+  });
+  
+  console.log(`Order placed with ID: ${orderId}`);
+  
+  // Cancel the order
+  await user.cancelOrder(orderId);
+} catch (error) {
+  console.error(`Trading error: ${error}`);
 }
 ```
 
-#### Subscriber
+### Deposits and Withdrawals
 
 ```typescript
-import { Subscriber } from "./nord";
+import { Nord, NordUser } from "nord-ts";
 
-const STREAM_URL =
-  "ws://localhost:3000/ws/trades@BTCUSDC&deltas@BTCUSDC&user@0";
+// Assuming nord and user are already initialized
 
-const s = new Subscriber({
-  streamURL: STREAM_URL,
-  maxBufferLen: 100,
+// Withdraw tokens
+try {
+  const tokenId = 0; // USDC
+  const amount = 100; // 100 USDC
+  
+  await user.withdraw(tokenId, amount);
+  console.log(`Successfully withdrew ${amount} of token ID ${tokenId}`);
+} catch (error) {
+  console.error(`Withdrawal error: ${error}`);
+}
+
+// For Solana SPL tokens
+try {
+  const tokenId = 1; // SOL
+  const amount = 1; // 1 SOL
+  
+  const txId = await user.depositSpl(amount, tokenId);
+  console.log(`Deposit transaction ID: ${txId}`);
+} catch (error) {
+  console.error(`Deposit error: ${error}`);
+}
+```
+
+### Market Data
+
+```typescript
+import { Nord } from "nord-ts";
+
+// Assuming nord is already initialized
+
+// Get orderbook for a market
+const orderbook = await nord.getOrderbook({ marketId: 0 });
+console.log('Bids:', orderbook.bids);
+console.log('Asks:', orderbook.asks);
+
+// Get recent trades
+const trades = await nord.getTrades({ marketId: 0, limit: 10 });
+console.log('Recent trades:', trades.trades);
+
+// Subscribe to real-time orderbook updates
+const orderbookSub = nord.subscribeOrderbook('BTC/USDC');
+orderbookSub.on('update', (data) => {
+  console.log('Orderbook update:', data);
 });
-s.subsribe();
+```
+
+### Account Information
+
+
+```typescript
+import { Nord, NordUser } from "nord-ts";
+
+// Assuming nord and user are already initialized
+
+// Get account information
+const accountInfo = await user.fetchInfo();
+
+// Access user balances
+console.log('Balances:', user.balances);
+
+// Access user positions
+console.log('Positions:', user.positions);
+
+// Access user orders
+console.log('Orders:', user.orders);
 ```
 
 ## Development
 
-### Install dependencies
-
 ```bash
+# Install dependencies
 yarn
-```
 
-### Generate proto files
-
-````bash
+# Build the package
 yarn build
 ```
-````
+
+## Documentation
+
+For more detailed documentation, please refer to the source code and inline comments in the `Nord` and `NordUser` classes.

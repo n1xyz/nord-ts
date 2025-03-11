@@ -17,14 +17,25 @@ export enum PeakTpsPeriodUnit {
   Year = "y",
 }
 
+/**
+ * Configuration options for the Nord client
+ */
 export interface NordConfig {
-  evmUrl: string;
+  /** Base URL for the Nord web server */
   webServerUrl: string;
-  contractAddress: string;
-  tokenInfos: ERC20TokenInfo[];
+  /** Solana program ID */
+  solanaProgramId: string;
+  /** Solana cluster URL */
+  solanaUrl: string;
+  /** Whether to initialize WebSockets on creation, defaults to true */
+  initWebSockets?: boolean;
+  /** Initial subscriptions for the trades WebSocket (e.g., ["trades@BTCUSDC"]) */
+  tradesSubscriptions?: string[];
+  /** Initial subscriptions for the deltas WebSocket (e.g., ["deltas@BTCUSDC"]) */
+  deltasSubscriptions?: string[];
 }
 
-export interface ERC20TokenInfo {
+export interface TokenInfo {
   address: string;
   precision: number;
   tokenId: number;
@@ -63,18 +74,20 @@ export interface SubscriberConfig {
 }
 
 export interface Market {
+  marketId: number;
   symbol: string;
-  baseTokenId: number;
-  quoteTokenId: number;
   priceDecimals: number;
   sizeDecimals: number;
+  baseTokenId: number;
+  quoteTokenId: number;
+  frozen: boolean;
 }
 
 export interface Token {
-  symbol: string;
-  ethAddr: string;
-  decimals: number;
   tokenId: number;
+  symbol: string;
+  decimals: number;
+  mintAddr: string;
 }
 
 export interface Info {
@@ -86,8 +99,8 @@ export interface DeltaEvent {
   last_update_id: number;
   update_id: number;
   market_symbol: string;
-  asks: [number, number];
-  bids: [number, number];
+  asks: OrderbookEntry[];
+  bids: OrderbookEntry[];
 }
 
 export interface Trade {
@@ -107,7 +120,7 @@ export interface Trades {
 export interface OrderInfo {
   id: number;
   reduce_only: boolean;
-  imit_price: number;
+  limit_price: number;
   size: number;
   account_id: number;
 }
@@ -120,7 +133,7 @@ export interface Account {
   last_update_id: number;
   update_id: number;
   account_id: number;
-  fills: HashMap<FillMode>;
+  fills: HashMap<number>;
   places: HashMap<OrderInfo>;
   cancels: HashMap<OrderInfo>;
   balances: HashMap<number>;
@@ -313,3 +326,139 @@ export function fillModeToProtoFillMode(x: FillMode): proto.FillMode {
   if (x === FillMode.FillOrKill) return proto.FillMode.FILL_OR_KILL;
   throw new Error("Invalid fill mode");
 }
+
+/**
+ * Response for trades query with pagination support
+ */
+export interface TradesResponse {
+  trades: Trade[];
+  accountId: number;
+  since?: string; // RFC3339 timestamp
+  until?: string; // RFC3339 timestamp
+  nextPageId?: string;
+}
+
+/**
+ * Query parameters for trades endpoint
+ */
+export interface TradesQuery {
+  accountId: number;
+  since?: string; // RFC3339 timestamp
+  until?: string; // RFC3339 timestamp
+  pageId?: string;
+}
+
+/**
+ * Response for user account IDs query
+ */
+export interface UserAccountIdsResponse {
+  accountIds: number[];
+}
+
+/**
+ * Query parameters for user account IDs
+ */
+export interface UserAccountIdsQuery {
+  pubkey: string; // secp256k1 public key in hex format
+}
+
+/**
+ * Orderbook entry representing price and size
+ */
+export interface OrderbookEntry {
+  price: number;
+  size: number;
+}
+
+/**
+ * Response for orderbook query
+ */
+export interface OrderbookResponse {
+  symbol: string;
+  asks: OrderbookEntry[];
+  bids: OrderbookEntry[];
+  timestamp: number;
+}
+
+/**
+ * Query parameters for orderbook
+ *
+ * Note: While you can provide either symbol or market_id, the API endpoint only accepts market_id.
+ * If you provide a symbol, it will be converted to a market_id internally.
+ */
+export interface OrderbookQuery {
+  symbol?: string;
+  market_id?: number;
+}
+
+/**
+ * Response for timestamp query
+ */
+export interface TimestampResponse {
+  timestamp: number; // engine's current logical timestamp
+}
+
+/**
+ * Response for action nonce query
+ */
+export interface ActionNonceResponse {
+  nonce: number; // next expected action nonce
+}
+
+/**
+ * WebSocket message types
+ */
+export enum WebSocketMessageType {
+  Subscribe = "subscribe",
+  Unsubscribe = "unsubscribe",
+  TradeUpdate = "trade",
+  DeltaUpdate = "delta",
+  UserUpdate = "user",
+}
+
+/**
+ * WebSocket subscription request
+ */
+export interface WebSocketSubscription {
+  type: WebSocketMessageType;
+  streams: string[]; // Array of streams to subscribe/unsubscribe (e.g. ["trades@BTCUSDC", "deltas@BTCUSDC"])
+}
+
+/**
+ * WebSocket trade update message
+ */
+export interface WebSocketTradeUpdate {
+  type: WebSocketMessageType.TradeUpdate;
+  symbol: string;
+  trades: Trade[];
+  timestamp: number;
+}
+
+/**
+ * WebSocket delta update message
+ */
+export interface WebSocketDeltaUpdate {
+  type: WebSocketMessageType.DeltaUpdate;
+  last_update_id: number;
+  update_id: number;
+  market_symbol: string;
+  asks: OrderbookEntry[];
+  bids: OrderbookEntry[];
+  timestamp: number;
+}
+
+/**
+ * WebSocket user update message
+ */
+export interface WebSocketUserUpdate {
+  type: WebSocketMessageType.UserUpdate;
+  userId: number;
+  account: Account;
+  timestamp: number;
+}
+
+export type WebSocketMessage =
+  | WebSocketSubscription
+  | WebSocketTradeUpdate
+  | WebSocketDeltaUpdate
+  | WebSocketUserUpdate;

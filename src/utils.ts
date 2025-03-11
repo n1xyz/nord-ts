@@ -9,8 +9,9 @@ import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import { ethers } from "ethers";
 import fetch from "node-fetch";
 import { RequestInfo, RequestInit, Response } from "node-fetch";
+import { BN } from "@coral-xyz/anchor";
 
-export const SESSION_TTL: bigint = 10n * 60n * 1000n * 10000n;
+export const SESSION_TTL: bigint = 60n * 60n * 24n * 30n;
 export const ZERO_DECIMAL = new Decimal(0);
 export const MAX_BUFFER_LEN = 10_000;
 
@@ -297,4 +298,24 @@ export function findToken(tokens: Token[], tokenId: number): Token {
     throw new Error(`The token with tokenId=${tokenId} not found`);
   }
   return tokens[tokenId];
+}
+
+/**
+ * Convert a number to a BN with the specified number of decimals
+ *
+ * @param amount Amount as a number
+ * @param decimals Number of decimal places
+ * @returns Amount as a BN
+ */
+export function toBN(amount: number, decimals: number): BN {
+  const amountString = amount.toFixed(decimals);
+  const [whole, fraction] = amountString.split(".");
+
+  // Convert to smallest units (no decimals)
+  const wholeBN = new BN(whole).mul(new BN(10).pow(new BN(decimals)));
+  const fractionBN = fraction
+    ? new BN(fraction.padEnd(decimals, "0").slice(0, decimals))
+    : new BN(0);
+
+  return wholeBN.add(fractionBN);
 }

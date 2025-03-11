@@ -1,5 +1,6 @@
-import { ethers } from "ethers";
-import { FillMode, fillModeToProtoFillMode, KeyType, Side } from "../types";
+import Decimal from "decimal.js";
+import * as proto from "../../gen/nord";
+import { FillMode, fillModeToProtoFillMode, KeyType, Side } from "../../types";
 import {
   assert,
   bigIntToProtoU128,
@@ -12,9 +13,7 @@ import {
   SESSION_TTL,
   toScaledU128,
   toScaledU64,
-} from "../utils";
-import * as proto from "../gen/nord";
-import Decimal from "decimal.js";
+} from "../../utils";
 
 async function sessionSign(
   signFn: (message: Uint8Array) => Promise<Uint8Array>,
@@ -25,14 +24,11 @@ async function sessionSign(
 }
 
 async function walletSign(
-  walletSignFn: (message: string | Uint8Array) => Promise<string>,
+  walletSignFn: (message: string | Uint8Array) => Promise<Uint8Array>,
   message: Uint8Array,
 ): Promise<Uint8Array> {
   const signature = await walletSignFn(message);
-  return new Uint8Array([
-    ...message,
-    ...ethers.getBytes(signature.slice(0, -2)),
-  ]);
+  return new Uint8Array([...message, ...signature]);
 }
 
 function makeSendHttp(
@@ -72,7 +68,7 @@ async function sendAction(
 
 async function createSessionImpl(
   sendFn: (encoded: Uint8Array) => Promise<Uint8Array>,
-  walletSignFn: (message: string | Uint8Array) => Promise<string>,
+  walletSignFn: (message: string | Uint8Array) => Promise<Uint8Array>,
   currentTimestamp: bigint,
   nonce: number,
   params: {
@@ -82,7 +78,7 @@ async function createSessionImpl(
     expiryTimestamp?: bigint;
   },
 ): Promise<bigint> {
-  checkPubKeyLength(KeyType.Secp256k1, params.userPubkey.length);
+  checkPubKeyLength(KeyType.Ed25519, params.userPubkey.length);
   checkPubKeyLength(KeyType.Ed25519, params.sessionPubkey.length);
 
   let expiry = 0n;
@@ -126,7 +122,7 @@ async function createSessionImpl(
 
 export async function createSession(
   serverUrl: string,
-  walletSignFn: (message: string | Uint8Array) => Promise<string>,
+  walletSignFn: (message: string | Uint8Array) => Promise<Uint8Array>,
   currentTimestamp: bigint,
   nonce: number,
   params: {
@@ -147,7 +143,7 @@ export async function createSession(
 
 async function revokeSessionImpl(
   sendFn: (encoded: Uint8Array) => Promise<Uint8Array>,
-  walletSignFn: (message: string | Uint8Array) => Promise<string>,
+  walletSignFn: (message: string | Uint8Array) => Promise<Uint8Array>,
   currentTimestamp: bigint,
   nonce: number,
   params: {
@@ -175,7 +171,7 @@ async function revokeSessionImpl(
 
 export async function revokeSession(
   serverUrl: string,
-  walletSignFn: (message: string | Uint8Array) => Promise<string>,
+  walletSignFn: (message: string | Uint8Array) => Promise<Uint8Array>,
   currentTimestamp: bigint,
   nonce: number,
   params: {

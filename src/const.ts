@@ -1,7 +1,6 @@
 // DEV SETUP:
-import { ERC20TokenInfo } from "./types";
+import { TokenInfo } from "./types";
 
-const EVM_PORT = "8545";
 const WEBSERVER_PORT = "80";
 
 export const DEBUG_KEYS = [
@@ -18,11 +17,9 @@ export const DEBUG_KEYS = [
 ];
 
 export const DEV_URL = "http://localhost";
-export const EVM_DEV_URL = DEV_URL + ":" + EVM_PORT;
 export const WEBSERVER_DEV_URL = DEV_URL + ":" + WEBSERVER_PORT;
-export const DEV_CONTRACT_ADDRESS =
-  "0x8a791620dd6260079bf849dc5567adc3f2fdc318";
-export const DEV_TOKEN_INFOS: ERC20TokenInfo[] = [
+
+export const DEV_TOKEN_INFOS: TokenInfo[] = [
   {
     address: "0x9a9f2ccfde556a7e9ff0848998aa4a0cfd8863ae",
     precision: 6,
@@ -30,10 +27,8 @@ export const DEV_TOKEN_INFOS: ERC20TokenInfo[] = [
     name: "usdc",
   },
 ];
-export const FAUCET_PRIVATE_ADDRESS =
-  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
 export const DEFAULT_FUNDING_AMOUNTS: { [key: string]: [string, number] } = {
-  ETH: ["0.2", 0],
+  SOL: ["0.2", 0],
   "0x9a9f2ccfde556a7e9ff0848998aa4a0cfd8863ae": ["10000", 6],
 };
