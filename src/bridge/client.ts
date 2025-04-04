@@ -19,9 +19,7 @@ import {
   SolanaBridgeConfig,
   WithdrawalParams,
 } from "./types";
-
-// Import the BRIDGE_IDL
-import { BRIDGE_IDL } from "../idl/bridge";
+import { BRIDGE_IDL } from "../idl";
 
 /**
  * Solana Bridge Client for interacting with the bridge program

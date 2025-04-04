@@ -7,9 +7,10 @@
   "scripts": {
     "dev": "nodemon --exec npx tsc",
     "build:proto": "./protoc-generate.sh",
+    "build:idl": "./idl-generate.sh",
+    "build": "pnpm run build:proto && pnpm run build:idl && pnpm exec tsc && pnpm run docs",
     "test": "pnpm exec jest",
     "docs": "pnpm exec typedoc --out ./docs ./src",
-    "build": "pnpm run build:proto && pnpm exec tsc && pnpm run docs",
     "compile": "tsc",
     "clean": "rm -rf ./src/gen ./dist ./docs",
     "fmt": "prettier --write src tests",
