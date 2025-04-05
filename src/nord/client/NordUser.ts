@@ -322,14 +322,12 @@ export class NordUser {
     const wallet: anchor.Wallet = {
       publicKey: this.getSolanaPublicKey(),
       signTransaction: async (tx: any) => {
-        await this.transactionSignFn(tx);
-        return tx;
+        return await this.transactionSignFn(tx);
       },
       signAllTransactions: async (txs: any[]) => {
         return Promise.all(
           txs.map(async (tx) => {
-            await this.transactionSignFn(tx);
-            return tx;
+            return await this.transactionSignFn(tx);
           }),
         );
       },
