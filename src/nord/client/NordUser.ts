@@ -656,7 +656,7 @@ export class NordUser {
       const accountsData = await Promise.all(
         this.accountIds.map(async (accountId) => {
           const response = await checkedFetch(
-            `${this.nord.webServerUrl}/account?account_id=${accountId}`,
+            `${this.nord.webServerUrl}/account/${accountId}`,
           );
           const accountData = (await response.json()) as Account;
           // Ensure we have the correct accountId
@@ -683,14 +683,15 @@ export class NordUser {
           (order: {
             orderId: number;
             side: string;
-            size: number;
+            size?: number;
+            current_size?: number;
             price: number;
             marketId: number;
           }) => {
             return {
               orderId: order.orderId,
               isLong: order.side === "bid",
-              size: order.size,
+              size: order.current_size,
               price: order.price,
               marketId: order.marketId,
             };

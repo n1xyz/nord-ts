@@ -66,7 +66,7 @@ export async function getAccount(
 ): Promise<Account> {
   try {
     const response = await checkedFetch(
-      `${webServerUrl}/account?account_id=${accountId}`,
+      `${webServerUrl}/account/${accountId}`,
     );
     return await response.json();
   } catch (error) {
