@@ -601,23 +601,23 @@ export class NordUser {
    * @throws {NordError} If the operation fails
    */
   async fetchInfo(): Promise<void> {
-    interface FetchOrder {
+    type OpenOrder = {
       orderId: number;
-      size: number;
-      price: number;
       marketId: number;
       side: "ask" | "bid";
-      originalOrderSize?: number;
+      size: number;
+      price: number;
+      originalOrderSize: number;
       clientOrderId?: number | null;
-    }
+    };
 
-    interface Balance {
+    type Balance = {
       tokenId: number;
       token: string;
       amount: number;
-    }
+    };
 
-    interface Position {
+    type Position = {
       marketId: number;
       openOrders: number;
       perp?: {
@@ -629,9 +629,9 @@ export class NordUser {
         isLong: boolean;
       };
       actionId: number;
-    }
+    };
 
-    interface Margins {
+    type Margins = {
       omf: number;
       mf: number;
       imf: number;
@@ -640,32 +640,31 @@ export class NordUser {
       pon: number;
       pn: number;
       bankruptcy: boolean;
-    }
+    };
 
-    interface Account {
+    type Account = {
       updateId: number;
-      orders: FetchOrder[];
+      orders: OpenOrder[];
       positions: Position[];
       balances: Balance[];
       margins: Margins;
-      actionNonce?: number | null;
-      accountId: number;
-    }
+    };
 
     if (this.accountIds !== undefined) {
-      const accountsData = await Promise.all(
-        this.accountIds.map(async (accountId) => {
-          const response = await checkedFetch(
-            `${this.nord.webServerUrl}/account/${accountId}`,
-          );
-          const accountData = (await response.json()) as Account;
-          // Ensure we have the correct accountId
-          return {
-            ...accountData,
-            accountId,
-          };
-        }),
-      );
+      const accountsData: (Account & { accountId: number })[] =
+        await Promise.all(
+          this.accountIds.map(async (accountId) => {
+            const response = await checkedFetch(
+              `${this.nord.webServerUrl}/account/${accountId}`,
+            );
+            const accountData = (await response.json()) as Account;
+            // Ensure we have the correct accountId
+            return {
+              ...accountData,
+              accountId,
+            };
+          }),
+        );
 
       for (const accountData of accountsData) {
         // Process balances
@@ -680,18 +679,11 @@ export class NordUser {
 
         // Process orders
         this.orders[accountData.accountId] = accountData.orders.map(
-          (order: {
-            orderId: number;
-            side: string;
-            size?: number;
-            current_size?: number;
-            price: number;
-            marketId: number;
-          }) => {
+          (order: OpenOrder) => {
             return {
               orderId: order.orderId,
               isLong: order.side === "bid",
-              size: order.current_size,
+              size: order.size,
               price: order.price,
               marketId: order.marketId,
             };

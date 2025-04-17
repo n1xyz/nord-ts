@@ -65,9 +65,7 @@ export async function getAccount(
   accountId: number,
 ): Promise<Account> {
   try {
-    const response = await checkedFetch(
-      `${webServerUrl}/account/${accountId}`,
-    );
+    const response = await checkedFetch(`${webServerUrl}/account/${accountId}`);
     return await response.json();
   } catch (error) {
     throw new NordError(`Failed to get account ${accountId}`, { cause: error });
