@@ -18,6 +18,18 @@ export enum PeakTpsPeriodUnit {
 }
 
 /**
+ * Nord subscription type for trades or deltas
+ */
+export type SubscriptionType = "trades" | "deltas" | "account";
+
+/**
+ * Pattern for a valid Nord subscription
+ * Format should be: "<type>@<parameter>"
+ * Examples: "trades@BTCUSDC", "deltas@ETHUSDC", "account@42"
+ */
+export type SubscriptionPattern = `${SubscriptionType}@${string}` | string;
+
+/**
  * Configuration options for the Nord client
  */
 export interface NordConfig {
@@ -29,12 +41,25 @@ export interface NordConfig {
   solanaUrl: string;
   /** Whether to initialize WebSockets on creation, defaults to true */
   initWebSockets?: boolean;
-  /** Initial subscriptions for the trades WebSocket (e.g., ["trades@BTCUSDC"]) */
-  tradesSubscriptions?: string[];
-  /** Initial subscriptions for the deltas WebSocket (e.g., ["deltas@BTCUSDC"]) */
-  deltasSubscriptions?: string[];
+  /**
+   * Initial subscriptions for the trades WebSocket
+   * Supports both formats:
+   * - Legacy format: ["BTCUSDC", "ETHUSDC"]
+   * - New format: ["trades@BTCUSDC", "trades@ETHUSDC"]
+   */
+  tradesSubscriptions?: SubscriptionPattern[];
+  /**
+   * Initial subscriptions for the deltas WebSocket
+   * Supports both formats:
+   * - Legacy format: ["BTCUSDC", "ETHUSDC"]
+   * - New format: ["deltas@BTCUSDC", "deltas@ETHUSDC"]
+   */
+  deltasSubscriptions?: SubscriptionPattern[];
 }
 
+/**
+ * Configuration options for the Nord client
+ */
 export interface TokenInfo {
   address: string;
   precision: number;
@@ -411,16 +436,16 @@ export interface ActionNonceResponse {
 export enum WebSocketMessageType {
   Subscribe = "subscribe",
   Unsubscribe = "unsubscribe",
-  TradeUpdate = "trade",
+  TradeUpdate = "trades",
   DeltaUpdate = "delta",
-  UserUpdate = "user",
+  AccountUpdate = "account",
 }
 
 /**
  * WebSocket subscription request
  */
 export interface WebSocketSubscription {
-  type: WebSocketMessageType;
+  e: WebSocketMessageType;
   streams: string[]; // Array of streams to subscribe/unsubscribe (e.g. ["trades@BTCUSDC", "deltas@BTCUSDC"])
 }
 
@@ -428,7 +453,7 @@ export interface WebSocketSubscription {
  * WebSocket trade update message
  */
 export interface WebSocketTradeUpdate {
-  type: WebSocketMessageType.TradeUpdate;
+  e: WebSocketMessageType.TradeUpdate;
   symbol: string;
   trades: Trade[];
   timestamp: number;
@@ -438,7 +463,7 @@ export interface WebSocketTradeUpdate {
  * WebSocket delta update message
  */
 export interface WebSocketDeltaUpdate {
-  type: WebSocketMessageType.DeltaUpdate;
+  e: WebSocketMessageType.DeltaUpdate;
   last_update_id: number;
   update_id: number;
   market_symbol: string;
@@ -450,9 +475,9 @@ export interface WebSocketDeltaUpdate {
 /**
  * WebSocket user update message
  */
-export interface WebSocketUserUpdate {
-  type: WebSocketMessageType.UserUpdate;
-  userId: number;
+export interface WebSocketAccountUpdate {
+  e: WebSocketMessageType.AccountUpdate;
+  accountId: number;
   account: Account;
   timestamp: number;
 }
@@ -461,4 +486,4 @@ export type WebSocketMessage =
   | WebSocketSubscription
   | WebSocketTradeUpdate
   | WebSocketDeltaUpdate
-  | WebSocketUserUpdate;
+  | WebSocketAccountUpdate;

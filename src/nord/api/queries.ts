@@ -2,84 +2,11 @@ import {
   ActionQuery,
   ActionResponse,
   ActionsResponse,
-  BlockQuery,
-  BlockResponse,
-  BlockSummaryResponse,
   RollmanActionResponse,
   RollmanActionsResponse,
-  RollmanBlockResponse,
 } from "../../types";
 import { checkedFetch } from "../../utils";
 import { NordError } from "../utils/NordError";
-
-/**
- * Query a specific block
- *
- * @param webServerUrl - Base URL for the Nord web server
- * @param query - Block query parameters
- * @returns Block response
- * @throws {NordError} If the request fails
- */
-export async function queryBlock(
-  webServerUrl: string,
-  query: BlockQuery,
-): Promise<BlockResponse> {
-  try {
-    const params = new URLSearchParams();
-    if (query.block_number !== undefined) {
-      params.append("block_height", query.block_number.toString());
-    }
-
-    const response = await checkedFetch(
-      `${webServerUrl}/block?${params.toString()}`,
-    );
-    return await response.json();
-  } catch (error) {
-    throw new NordError("Failed to query block", { cause: error });
-  }
-}
-
-/**
- * Query the last N blocks
- *
- * @param webServerUrl - Base URL for the Nord web server
- * @returns Block response for the last N blocks
- * @throws {NordError} If the request fails
- */
-export async function queryLastNBlocks(
-  webServerUrl: string,
-): Promise<BlockResponse> {
-  try {
-    const response = await checkedFetch(`${webServerUrl}/blocks`);
-    return await response.json();
-  } catch (error) {
-    throw new NordError("Failed to query last N blocks", { cause: error });
-  }
-}
-
-/**
- * Query recent blocks
- *
- * @param webServerUrl - Base URL for the Nord web server
- * @param last_n - Number of recent blocks to query
- * @returns Block summary response
- * @throws {NordError} If the request fails
- */
-export async function queryRecentBlocks(
-  webServerUrl: string,
-  last_n: number,
-): Promise<BlockSummaryResponse> {
-  try {
-    const response = await checkedFetch(
-      `${webServerUrl}/blocks_summary?last_n=${last_n}`,
-    );
-    return await response.json();
-  } catch (error) {
-    throw new NordError(`Failed to query recent blocks (last ${last_n})`, {
-      cause: error,
-    });
-  }
-}
 
 /**
  * Query a specific action
@@ -112,75 +39,47 @@ export async function queryAction(
  * Query recent actions
  *
  * @param webServerUrl - Base URL for the Nord web server
- * @param last_n - Number of recent actions to query
+ * @param from - Starting action index
+ * @param to - Ending action index
  * @returns Actions response
  * @throws {NordError} If the request fails
  */
 export async function queryRecentActions(
   webServerUrl: string,
-  last_n: number,
+  from: number,
+  to: number,
 ): Promise<ActionsResponse> {
   try {
     const response = await checkedFetch(
-      `${webServerUrl}/actions?last_n=${last_n}`,
-    );
-    return await response.json();
-  } catch (error) {
-    throw new NordError(`Failed to query recent actions (last ${last_n})`, {
-      cause: error,
-    });
-  }
-}
-
-/**
- * Query a block from Rollman
- *
- * @param webServerUrl - Base URL for the Nord web server
- * @param query - Block query parameters
- * @returns Rollman block response
- * @throws {NordError} If the request fails
- */
-export async function blockQueryRollman(
-  webServerUrl: string,
-  query: BlockQuery,
-): Promise<RollmanBlockResponse> {
-  try {
-    const params = new URLSearchParams();
-    if (query.block_number !== undefined) {
-      params.append("block_height", query.block_number.toString());
-    }
-
-    const response = await checkedFetch(
-      `${webServerUrl}/rollman/block?${params.toString()}`,
-    );
-    return await response.json();
-  } catch (error) {
-    throw new NordError("Failed to query Rollman block", { cause: error });
-  }
-}
-
-/**
- * Query block summaries from Rollman
- *
- * @param webServerUrl - Base URL for the Nord web server
- * @param last_n - Number of recent blocks to query
- * @returns Block summary response
- * @throws {NordError} If the request fails
- */
-export async function blockSummaryQueryRollman(
-  webServerUrl: string,
-  last_n: number,
-): Promise<BlockSummaryResponse> {
-  try {
-    const response = await checkedFetch(
-      `${webServerUrl}/rollman/blocks_summary?last_n=${last_n}`,
+      `${webServerUrl}/actions?from=${from}&to=${to}`,
     );
     return await response.json();
   } catch (error) {
     throw new NordError(
-      `Failed to query Rollman block summaries (last ${last_n})`,
-      { cause: error },
+      `Failed to query recent actions (from ${from} to ${to})`,
+      {
+        cause: error,
+      },
     );
+  }
+}
+
+/**
+ * Get the last action ID
+ *
+ * @param webServerUrl - Base URL for the Nord web server
+ * @returns Last action ID
+ * @throws {NordError} If the request fails
+ */
+export async function getLastActionId(webServerUrl: string): Promise<number> {
+  try {
+    const response = await checkedFetch(`${webServerUrl}/last_actionid`);
+    const data = await response.json();
+    return data.last_actionid;
+  } catch (error) {
+    throw new NordError("Failed to get last action ID", {
+      cause: error,
+    });
   }
 }
 

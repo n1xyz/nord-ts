@@ -112,17 +112,6 @@ export interface TransferParams {
 }
 
 /**
- * Parameters for creating a new account
- */
-export interface CreateAccountParams {
-  /** Token ID for initial funding */
-  tokenId: number;
-
-  /** Initial funding amount */
-  amount: Decimal.Value;
-}
-
-/**
  * User class for interacting with the Nord protocol
  */
 export class NordUser {
@@ -322,14 +311,12 @@ export class NordUser {
     const wallet: anchor.Wallet = {
       publicKey: this.getSolanaPublicKey(),
       signTransaction: async (tx: any) => {
-        await this.transactionSignFn(tx);
-        return tx;
+        return await this.transactionSignFn(tx);
       },
       signAllTransactions: async (txs: any[]) => {
         return Promise.all(
           txs.map(async (tx) => {
-            await this.transactionSignFn(tx);
-            return tx;
+            return await this.transactionSignFn(tx);
           }),
         );
       },
@@ -884,44 +871,6 @@ export class NordUser {
       );
     } catch (error) {
       throw new NordError("Failed to transfer tokens", { cause: error });
-    }
-  }
-
-  /**
-   * Create a new account
-   *
-   * @param params - Account creation parameters
-   * @returns New NordUser instance
-   * @throws {NordError} If the operation fails
-   */
-  async createAccount(params: CreateAccountParams): Promise<NordUser> {
-    try {
-      this.checkSessionValidity();
-      // Create a new keypair for the account
-      const keypair = Keypair.generate();
-
-      // Create a new NordUser
-      const newUser = NordUser.fromPrivateKey(
-        this.nord,
-        keypair.secretKey,
-        this.connection,
-      );
-
-      // Transfer initial funds
-      await this.transferToAccount({
-        to: newUser,
-        tokenId: params.tokenId,
-        amount: params.amount,
-        fromAccountId: optExpect(this.accountIds?.[0], "No account ID"),
-        toAccountId: optExpect(
-          newUser.accountIds?.[0],
-          "No account ID for new user",
-        ),
-      });
-
-      return newUser;
-    } catch (error) {
-      throw new NordError("Failed to create account", { cause: error });
     }
   }
 

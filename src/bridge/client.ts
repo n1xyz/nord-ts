@@ -108,13 +108,13 @@ export class SolanaBridgeClient {
   }
 
   /**
-   * Find the asset whitelisted PDA for a token mint
+   * Find the asset config PDA for a token mint
    *
    * @param mint Token mint address
    * @returns [PDA, bump]
    */
-  async findAssetWhitelistedPda(mint: PublicKey): Promise<[PublicKey, number]> {
-    return this.findPda(PdaSeedType.AssetWhitelisted, mint);
+  async findAssetConfigPda(mint: PublicKey): Promise<[PublicKey, number]> {
+    return this.findPda(PdaSeedType.AssetConfig, mint);
   }
 
   /**
@@ -193,7 +193,7 @@ export class SolanaBridgeClient {
    */
   async depositSpl(params: DepositSplParams): Promise<string> {
     const [contractStorage] = await this.findContractStoragePda();
-    const [assetWhitelisted] = await this.findAssetWhitelistedPda(params.mint);
+    const [assetConfig] = await this.findAssetConfigPda(params.mint);
 
     // Get the last deposit index from contract storage
     const contractStorageAccount =
@@ -215,7 +215,7 @@ export class SolanaBridgeClient {
     const accounts: any = {
       depositor: this.provider.wallet.publicKey,
       deposit,
-      assetWhitelisted,
+      assetConfig,
       contractStorage,
       fromAccount: params.fromAccount,
       toAccount: params.toAccount,
@@ -298,7 +298,7 @@ export class SolanaBridgeClient {
    */
   async whitelistAsset(mint: PublicKey, signer: Keypair): Promise<string> {
     const [contractStorage] = await this.findContractStoragePda();
-    const [assetWhitelisted] = await this.findAssetWhitelistedPda(mint);
+    const [assetWhitelisted] = await this.findAssetConfigPda(mint);
 
     // Build the transaction
     const tx = await this.program.methods

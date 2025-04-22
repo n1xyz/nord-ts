@@ -5,9 +5,6 @@ import {
   ActionResponse,
   ActionsResponse,
   AggregateMetrics,
-  BlockQuery,
-  BlockResponse,
-  BlockSummaryResponse,
   Info,
   Market,
   MarketsStatsResponse,
@@ -17,7 +14,7 @@ import {
   PeakTpsPeriodUnit,
   RollmanActionResponse,
   RollmanActionsResponse,
-  RollmanBlockResponse,
+  SubscriptionPattern,
   Token,
   TradesQuery,
   TradesResponse,
@@ -37,6 +34,18 @@ import { NordError } from "../utils/NordError";
  */
 export interface UserSubscription extends EventEmitter {
   close: () => void;
+}
+
+/**
+ * WebSocket subscription options interface
+ */
+export interface WebSocketSubscriptionOptions {
+  /** Market symbols to subscribe to for trade updates */
+  trades?: string[];
+  /** Market symbols to subscribe to for orderbook delta updates */
+  deltas?: string[];
+  /** Account IDs to subscribe to for account updates */
+  accounts?: number[];
 }
 
 /**
@@ -62,55 +71,15 @@ export class Nord {
   private symbolToMarketId: Map<string, number> = new Map();
 
   /**
-   * WebSocket client for trades
-   * @private
-   */
-  private tradesWs: NordWebSocketClient | null = null;
-
-  /**
-   * WebSocket client for orderbook deltas
-   * @private
-   */
-  private deltasWs: NordWebSocketClient | null = null;
-
-  /**
-   * WebSocket client for user updates
-   * @private
-   */
-  private userWs: NordWebSocketClient | null = null;
-
-  /**
-   * Initial subscriptions for the trades WebSocket
-   * @private
-   */
-  private tradesSubscriptions?: string[];
-
-  /**
-   * Initial subscriptions for the deltas WebSocket
-   * @private
-   */
-  private deltasSubscriptions?: string[];
-
-  /**
    * Create a new Nord client
    *
    * @param config - Configuration options for the Nord client
    * @param config.webServerUrl - Base URL for the Nord web server
    * @param config.solanaProgramId - Solana program ID
    * @param config.solanaUrl - Solana cluster URL
-   * @param config.initWebSockets - Whether to initialize WebSockets on creation, defaults to true
-   * @param config.tradesSubscriptions - Optional array of trades subscriptions to initialize with (e.g., ["trades@BTCUSDC"])
-   * @param config.deltasSubscriptions - Optional array of deltas subscriptions to initialize with (e.g., ["deltas@BTCUSDC"])
    * @throws {Error} If required configuration is missing
    */
-  constructor({
-    webServerUrl,
-    solanaProgramId,
-    solanaUrl,
-    initWebSockets = true,
-    tradesSubscriptions,
-    deltasSubscriptions,
-  }: NordConfig) {
+  constructor({ webServerUrl, solanaProgramId, solanaUrl }: NordConfig) {
     if (!webServerUrl) {
       throw new NordError("webServerUrl is required");
     }
@@ -126,48 +95,67 @@ export class Nord {
     this.webServerUrl = webServerUrl;
     this.solanaProgramId = solanaProgramId;
     this.solanaUrl = solanaUrl;
-
-    // Store subscription parameters
-    this.tradesSubscriptions = tradesSubscriptions;
-    this.deltasSubscriptions = deltasSubscriptions;
-
-    // Initialize WebSocket clients only if initWebSockets is true
-    if (initWebSockets) {
-      this.initializeWebSockets();
-    }
   }
 
   /**
-   * Initialize WebSocket clients for trades and deltas
+   * Create a WebSocket client with specific subscriptions
    *
-   * This method can be called manually if websockets were not initialized during construction
-   * (i.e., if initWebSockets was set to false in the constructor).
+   * @param options - Subscription options that specify which data streams to subscribe to
+   * @returns A new WebSocket client with the requested subscriptions
+   * @throws {NordError} If invalid subscription options are provided
    *
-   * It initializes the trades and deltas WebSocket clients. The user WebSocket client
-   * is initialized on demand when needed.
+   * @example
+   * // Create a client for trades and deltas from one market and an account
+   * const wsClient = nord.createWebSocketClient({
+   *   trades: ["BTCUSDC"],
+   *   deltas: ["BTCUSDC"],
+   *   accounts: [123]
+   * });
    *
-   * @param tradesSubscriptions - Optional array of trades subscriptions to initialize with
-   * @param deltasSubscriptions - Optional array of deltas subscriptions to initialize with
+   * @example
+   * // Create a client for trades from multiple markets
+   * const tradesClient = nord.createWebSocketClient({
+   *   trades: ["BTCUSDC", "ETHUSDC"]
+   * });
    */
-  public initializeWebSockets(
-    tradesSubscriptions?: string[],
-    deltasSubscriptions?: string[],
-  ): void {
-    // Use provided subscriptions or fall back to stored ones
-    const trades = tradesSubscriptions || this.tradesSubscriptions;
-    const deltas = deltasSubscriptions || this.deltasSubscriptions;
+  public createWebSocketClient(
+    options: WebSocketSubscriptionOptions,
+  ): NordWebSocketClient {
+    const subscriptions: SubscriptionPattern[] = [];
 
-    // Initialize WebSocket clients for each endpoint with subscriptions
-    this.tradesWs = core.initWebSocketClient(
-      this.webServerUrl,
-      "trades",
-      trades,
-    );
-    this.deltasWs = core.initWebSocketClient(
-      this.webServerUrl,
-      "deltas",
-      deltas,
-    );
+    // Add trade subscriptions
+    if (options.trades && options.trades.length > 0) {
+      options.trades.forEach((symbol) => {
+        subscriptions.push(`trades@${symbol}` as SubscriptionPattern);
+      });
+    }
+
+    // Add delta subscriptions
+    if (options.deltas && options.deltas.length > 0) {
+      options.deltas.forEach((symbol) => {
+        subscriptions.push(`deltas@${symbol}` as SubscriptionPattern);
+      });
+    }
+
+    // Add account subscriptions
+    if (options.accounts && options.accounts.length > 0) {
+      options.accounts.forEach((accountId) => {
+        if (isNaN(accountId) || accountId <= 0) {
+          throw new NordError(
+            `Invalid account ID: ${accountId}. Must be a positive number.`,
+          );
+        }
+        subscriptions.push(`account@${accountId}` as SubscriptionPattern);
+      });
+    }
+
+    // Validate that at least one subscription was provided
+    if (subscriptions.length === 0) {
+      throw new NordError("At least one subscription must be provided");
+    }
+
+    // Create and return a new WebSocket client
+    return core.initWebSocketClient(this.webServerUrl, subscriptions);
   }
 
   /**
@@ -218,9 +206,6 @@ export class Nord {
    * @param nordConfig.webServerUrl - Base URL for the Nord web server
    * @param nordConfig.solanaProgramId - Solana program ID
    * @param nordConfig.solanaUrl - Solana cluster URL
-   * @param nordConfig.initWebSockets - Whether to initialize WebSockets on creation, defaults to true
-   * @param nordConfig.tradesSubscriptions - Optional array of trades subscriptions (e.g., ["trades@BTCUSDC"])
-   * @param nordConfig.deltasSubscriptions - Optional array of deltas subscriptions (e.g., ["deltas@BTCUSDC"])
    * @returns Initialized Nord client
    * @throws {NordError} If initialization fails
    */
@@ -241,38 +226,6 @@ export class Nord {
   }
 
   /**
-   * Query a specific block
-   *
-   * @param query - Block query parameters
-   * @returns Block response
-   * @throws {NordError} If the request fails
-   */
-  async queryBlock(query: BlockQuery): Promise<BlockResponse> {
-    return queries.queryBlock(this.webServerUrl, query);
-  }
-
-  /**
-   * Query the last N blocks
-   *
-   * @returns Block response for the last N blocks
-   * @throws {NordError} If the request fails
-   */
-  async queryLastNBlocks(): Promise<BlockResponse> {
-    return queries.queryLastNBlocks(this.webServerUrl);
-  }
-
-  /**
-   * Query recent blocks
-   *
-   * @param last_n - Number of recent blocks to query
-   * @returns Block summary response
-   * @throws {NordError} If the request fails
-   */
-  async queryRecentBlocks(last_n: number): Promise<BlockSummaryResponse> {
-    return queries.queryRecentBlocks(this.webServerUrl, last_n);
-  }
-
-  /**
    * Query a specific action
    *
    * @param query - Action query parameters
@@ -286,12 +239,23 @@ export class Nord {
   /**
    * Query recent actions
    *
-   * @param last_n - Number of recent actions to query
+   * @param from - Starting action index
+   * @param to - Ending action index
    * @returns Actions response
    * @throws {NordError} If the request fails
    */
-  async queryRecentActions(last_n: number): Promise<ActionsResponse> {
-    return queries.queryRecentActions(this.webServerUrl, last_n);
+  async queryRecentActions(from: number, to: number): Promise<ActionsResponse> {
+    return queries.queryRecentActions(this.webServerUrl, from, to);
+  }
+
+  /**
+   * Get the last action ID
+   *
+   * @returns Last action ID
+   * @throws {NordError} If the request fails
+   */
+  async getLastActionId(): Promise<number> {
+    return queries.getLastActionId(this.webServerUrl);
   }
 
   /**
@@ -357,30 +321,6 @@ export class Nord {
   }
 
   /**
-   * Query a block from Rollman
-   *
-   * @param query - Block query parameters
-   * @returns Rollman block response
-   * @throws {NordError} If the request fails
-   */
-  async blockQueryRollman(query: BlockQuery): Promise<RollmanBlockResponse> {
-    return queries.blockQueryRollman(this.webServerUrl, query);
-  }
-
-  /**
-   * Query block summaries from Rollman
-   *
-   * @param last_n - Number of recent blocks to query
-   * @returns Block summary response
-   * @throws {NordError} If the request fails
-   */
-  async blockSummaryQueryRollman(
-    last_n: number,
-  ): Promise<BlockSummaryResponse> {
-    return queries.blockSummaryQueryRollman(this.webServerUrl, last_n);
-  }
-
-  /**
    * Query an action from Rollman
    *
    * @param query - Action query parameters
@@ -414,67 +354,21 @@ export class Nord {
   }
 
   /**
-   * Get the trades WebSocket client (default)
-   * If not already initialized, it will be created
-   *
-   * @returns WebSocket client for trades
-   */
-  public getWebSocketClient(): NordWebSocketClient {
-    if (!this.tradesWs) {
-      this.initializeWebSockets();
-    }
-    return this.tradesWs!;
-  }
-
-  /**
-   * Get the trades WebSocket client
-   * If not already initialized, it will be created
-   *
-   * @returns WebSocket client for trades
-   */
-  public getTradesWebSocketClient(): NordWebSocketClient {
-    if (!this.tradesWs) {
-      this.initializeWebSockets();
-    }
-    return this.tradesWs!;
-  }
-
-  /**
-   * Get the deltas WebSocket client
-   * If not already initialized, it will be created
-   *
-   * @returns WebSocket client for orderbook deltas
-   */
-  public getDeltasWebSocketClient(): NordWebSocketClient {
-    if (!this.deltasWs) {
-      this.initializeWebSockets();
-    }
-    return this.deltasWs!;
-  }
-
-  /**
-   * Get the user WebSocket client
-   * If not already initialized, it will be created
-   *
-   * @returns WebSocket client for user updates
-   */
-  public getUserWebSocketClient(): NordWebSocketClient {
-    if (!this.userWs) {
-      // Initialize user WebSocket client on demand
-      this.userWs = core.initWebSocketClient(this.webServerUrl, "user");
-      return this.userWs;
-    }
-    return this.userWs;
-  }
-
-  /**
    * Subscribe to orderbook updates for a market
    *
    * @param symbol - Market symbol
    * @returns Orderbook subscription
+   * @throws {NordError} If symbol is invalid
    */
   public subscribeOrderbook(symbol: string): OrderbookSubscription {
+    if (!symbol || typeof symbol !== "string") {
+      throw new NordError("Invalid market symbol");
+    }
+
     const subscription = new EventEmitter() as OrderbookSubscription;
+    const wsClient = this.createWebSocketClient({
+      deltas: [symbol],
+    });
 
     const handleDelta = (update: {
       symbol: string;
@@ -488,17 +382,11 @@ export class Nord {
       subscription.emit("message", update);
     };
 
-    // Initialize deltas websocket if it doesn't exist
-    if (!this.deltasWs) {
-      this.initializeWebSockets();
-    }
-
-    this.deltasWs!.on("delta", handleDelta);
-    this.deltasWs!.subscribe([`deltas@${symbol}`]);
+    wsClient.on("delta", handleDelta);
 
     subscription.close = () => {
-      this.deltasWs!.unsubscribe([`deltas@${symbol}`]);
-      this.deltasWs!.removeListener("delta", handleDelta);
+      wsClient.unsubscribe([`deltas@${symbol}`]);
+      wsClient.removeListener("delta", handleDelta);
       subscription.removeAllListeners();
     };
 
@@ -510,9 +398,17 @@ export class Nord {
    *
    * @param symbol - Market symbol
    * @returns Trade subscription
+   * @throws {NordError} If symbol is invalid
    */
   public subscribeTrades(symbol: string): TradeSubscription {
+    if (!symbol || typeof symbol !== "string") {
+      throw new NordError("Invalid market symbol");
+    }
+
     const subscription = new EventEmitter() as TradeSubscription;
+    const wsClient = this.createWebSocketClient({
+      trades: [symbol],
+    });
 
     const handleTrade = (update: {
       symbol: string;
@@ -530,17 +426,47 @@ export class Nord {
       subscription.emit("message", update);
     };
 
-    // Initialize trades websocket if it doesn't exist
-    if (!this.tradesWs) {
-      this.initializeWebSockets();
-    }
-
-    this.tradesWs!.on("trade", handleTrade);
-    this.tradesWs!.subscribe([`trades@${symbol}`]);
+    wsClient.on("trades", handleTrade);
 
     subscription.close = () => {
-      this.tradesWs!.unsubscribe([`trades@${symbol}`]);
-      this.tradesWs!.removeListener("trade", handleTrade);
+      wsClient.unsubscribe([`trades@${symbol}`]);
+      wsClient.removeListener("trades", handleTrade);
+      subscription.removeAllListeners();
+    };
+
+    return subscription;
+  }
+
+  /**
+   * Subscribe to account updates
+   *
+   * @param accountId - Account ID to subscribe to
+   * @returns User subscription
+   * @throws {NordError} If accountId is invalid
+   */
+  public subscribeAccount(accountId: number): UserSubscription {
+    if (isNaN(accountId) || accountId <= 0) {
+      throw new NordError("Invalid account ID");
+    }
+
+    const subscription = new EventEmitter() as UserSubscription;
+    const wsClient = this.createWebSocketClient({
+      accounts: [accountId],
+    });
+
+    const handleAccountUpdate = (update: any) => {
+      if (update.account_id !== accountId) {
+        return;
+      }
+
+      subscription.emit("message", update);
+    };
+
+    wsClient.on("account", handleAccountUpdate);
+
+    subscription.close = () => {
+      wsClient.unsubscribe([`account@${accountId}`]);
+      wsClient.removeListener("account", handleAccountUpdate);
       subscription.removeAllListeners();
     };
 
@@ -594,11 +520,6 @@ export class Nord {
       }
 
       query = { market_id: marketId };
-    }
-
-    // Ensure market_id is provided
-    if (query.market_id === undefined) {
-      throw new NordError("market_id is required for orderbook query");
     }
 
     return market.getOrderbook(this.webServerUrl, query);

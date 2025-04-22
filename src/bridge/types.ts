@@ -118,7 +118,7 @@ export interface TransferParams {
  */
 export enum PdaSeedType {
   ContractStorage = "contract_storage",
-  AssetWhitelisted = "asset_whitelisted",
+  AssetConfig = "asset_config",
   DepositStorage = "deposit_storage",
   BlockStorage = "block_storage",
   WithdrawalNullifier = "withdrawal_nullifier",

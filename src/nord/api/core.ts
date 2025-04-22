@@ -1,4 +1,4 @@
-import { Account, Info } from "../../types";
+import { Account, Info, SubscriptionPattern } from "../../types";
 import { checkedFetch } from "../../utils";
 import { NordWebSocketClient } from "../../websocket/index";
 import { NordError } from "../utils/NordError";
@@ -75,27 +75,55 @@ export async function getAccount(
 /**
  * Initialize a WebSocket client for Nord
  *
- * Connects to one of the specific Nord WebSocket endpoints:
- * - /ws/trades - For trade updates (default)
- * - /ws/deltas - For orderbook delta updates
- * - /ws/user - For user-specific updates
+ * Connects to the Nord WebSocket endpoint with support for multiple subscription types:
+ * - trades@SYMBOL - For trade updates
+ * - deltas@SYMBOL - For orderbook delta updates
+ * - account@ACCOUNT_ID - For user-specific updates
  *
  * @param webServerUrl - Base URL for the Nord web server
- * @param endpoint - Specific WebSocket endpoint to connect to (trades, deltas, or user)
- * @param initialSubscriptions - Optional array of initial subscriptions (e.g., ["trades@BTCUSDC"])
+ * @param subscriptions - Array of subscriptions (e.g., ["trades@BTCUSDC", "deltas@BTCUSDC", "account@42"])
  * @returns WebSocket client
+ * @throws {NordError} If initialization fails or invalid subscription is provided
  */
 export function initWebSocketClient(
   webServerUrl: string,
-  endpoint?: "trades" | "deltas" | "user",
-  initialSubscriptions?: string[],
+  subscriptions?: SubscriptionPattern[] | "trades" | "delta" | "account",
+  initialSubscriptions?: SubscriptionPattern[],
 ): NordWebSocketClient {
   try {
-    // Convert HTTP URL to WebSocket URL with specific endpoint
-    // If no specific endpoint is provided, we'll connect to trades by default
-    const specificEndpoint = endpoint || "trades";
-    const wsUrl =
-      webServerUrl.replace(/^http/, "ws") + `/ws/${specificEndpoint}`;
+    // Determine URL and subscriptions based on parameters
+    let wsUrl = webServerUrl.replace(/^http/, "ws") + `/ws`;
+    let wsSubscriptions: SubscriptionPattern[] = [];
+
+    // Validate subscriptions parameter
+    if (typeof subscriptions === "string") {
+      // Legacy mode - handle endpoint string
+      if (
+        subscriptions === "trades" ||
+        subscriptions === "delta" ||
+        subscriptions === "account"
+      ) {
+        wsUrl += `/${subscriptions}`;
+        // If initialSubscriptions provided, use them
+        if (initialSubscriptions && initialSubscriptions.length > 0) {
+          // Validate initialSubscriptions
+          initialSubscriptions.forEach(validateSubscription);
+          wsSubscriptions = initialSubscriptions;
+        }
+      } else {
+        throw new NordError(
+          `Invalid endpoint: ${subscriptions}. Must be "trades", "deltas", or "account".`,
+        );
+      }
+    } else if (Array.isArray(subscriptions) && subscriptions.length > 0) {
+      // New mode - validate and combine subscriptions in URL
+      subscriptions.forEach(validateSubscription);
+      wsUrl += `/${subscriptions.join("&")}`;
+    } else {
+      // Default to trades endpoint if no subscriptions specified
+      wsUrl += `/trades`;
+    }
+
     console.log(`Initializing WebSocket client with URL: ${wsUrl}`);
 
     // Create and connect the WebSocket client
@@ -110,9 +138,10 @@ export function initWebSocketClient(
     ws.on("connected", () => {
       console.log("Nord WebSocket connected successfully");
 
-      // Subscribe to initial subscriptions if provided
-      if (initialSubscriptions && initialSubscriptions.length > 0) {
-        ws.subscribe(initialSubscriptions);
+      // Subscribe to additional subscriptions if provided
+      // For new format, these are already part of the URL
+      if (wsSubscriptions.length > 0) {
+        ws.subscribe(wsSubscriptions);
       }
     });
 
@@ -124,5 +153,28 @@ export function initWebSocketClient(
     throw new NordError("Failed to initialize WebSocket client", {
       cause: error,
     });
+  }
+}
+
+/**
+ * Validates a subscription string follows the correct format
+ *
+ * @param subscription - The subscription to validate
+ * @throws {NordError} If the subscription format is invalid
+ */
+function validateSubscription(subscription: string): void {
+  const [type, param] = subscription.split("@");
+
+  if (!type || !param || !["trades", "deltas", "account"].includes(type)) {
+    throw new NordError(
+      `Invalid subscription format: ${subscription}. Expected format: "trades@SYMBOL", "deltas@SYMBOL", or "account@ID"`,
+    );
+  }
+
+  // Additional validation for account subscriptions
+  if (type === "account" && isNaN(Number(param))) {
+    throw new NordError(
+      `Invalid account ID in subscription: ${subscription}. Account ID must be a number.`,
+    );
   }
 }

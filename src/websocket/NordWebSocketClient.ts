@@ -6,7 +6,7 @@ import {
   WebSocketSubscription,
   WebSocketTradeUpdate,
   WebSocketDeltaUpdate,
-  WebSocketUserUpdate,
+  WebSocketAccountUpdate,
 } from "../types";
 import { NordWebSocketClientEvents } from "./events";
 
@@ -27,7 +27,7 @@ type BrowserWebSocket = {
 
 type WebSocketInstance = WebSocket | BrowserWebSocket;
 
-const VALID_STREAM_TYPES = ["trades", "deltas", "user"];
+const VALID_STREAM_TYPES = ["trades", "delta", "account"];
 
 // Constants for WebSocket readyState
 const WS_OPEN = 1;
@@ -36,9 +36,6 @@ const WS_OPEN = 1;
  * WebSocket client for Nord exchange
  *
  * This client connects to one of the specific Nord WebSocket endpoints:
- * - /ws/trades - For trade updates
- * - /ws/deltas - For orderbook delta updates
- * - /ws/user - For user-specific updates
  *
  * Each endpoint handles a specific type of data and subscriptions must match
  * the endpoint type (e.g., only 'trades@BTCUSDC' subscriptions are valid on
@@ -104,9 +101,9 @@ export class NordWebSocketClient
       );
     }
 
-    if (type === "user" && !/^\d+$/.test(params)) {
+    if (type === "account" && !/^\d+$/.test(params)) {
       throw new Error(
-        `Invalid user ID in stream: ${params}. Expected numeric ID`,
+        `Invalid account ID in stream: ${params}. Expected numeric ID`,
       );
     }
   }
@@ -304,7 +301,7 @@ export class NordWebSocketClient
     }
 
     const message: WebSocketSubscription = {
-      type: WebSocketMessageType.Subscribe,
+      e: WebSocketMessageType.Subscribe,
       streams,
     };
 
@@ -351,7 +348,7 @@ export class NordWebSocketClient
     }
 
     const message: WebSocketSubscription = {
-      type: WebSocketMessageType.Unsubscribe,
+      e: WebSocketMessageType.Unsubscribe,
       streams,
     };
 
@@ -399,18 +396,18 @@ export class NordWebSocketClient
    * @param message WebSocket message
    */
   private handleMessage(message: WebSocketMessage): void {
-    switch (message.type) {
+    switch (message.e) {
       case WebSocketMessageType.TradeUpdate:
-        this.emit("trade", message as WebSocketTradeUpdate);
+        this.emit("trades", message as WebSocketTradeUpdate);
         break;
       case WebSocketMessageType.DeltaUpdate:
         this.emit("delta", message as WebSocketDeltaUpdate);
         break;
-      case WebSocketMessageType.UserUpdate:
-        this.emit("user", message as WebSocketUserUpdate);
+      case WebSocketMessageType.AccountUpdate:
+        this.emit("account", message as WebSocketAccountUpdate);
         break;
       default:
-        this.emit("error", new Error(`Unknown message type: ${message.type}`));
+        this.emit("error", new Error(`Unknown message type: ${message.e}`));
     }
   }
 
