@@ -41,12 +41,12 @@ import { Nord } from "nord-ts";
 // Create a Nord instance
 const nord = new Nord({
   webServerUrl: 'https://api.nord.exchange',
-  solanaProgramId: 'your_solana_program_id',
+  bridgeVk: 'your_bridge_vk', // Provide the bridge verification key
   solanaUrl: 'https://api.mainnet-beta.solana.com',
 });
 
 // Initialize and fetch market data
-await nord.fetchNordInfo();
+await Nord.initNord(nord); // Initialize client (derives program ID, fetches info)
 ```
 
 ### Creating a User from Private Key
@@ -55,12 +55,15 @@ await nord.fetchNordInfo();
 import { Nord, NordUser } from "nord-ts";
 import { Connection } from "@solana/web3.js";
 
-// Create Nord instance
-const nord = new Nord({
+// Define Nord configuration
+const nordConfig = {
   webServerUrl: 'https://api.nord.exchange',
-  solanaProgramId: 'your_solana_program_id',
+  bridgeVk: 'your_bridge_vk', // Provide the bridge verification key
   solanaUrl: 'https://api.mainnet-beta.solana.com',
-});
+};
+
+// Initialize Nord client asynchronously
+const nord = await Nord.initNord(nordConfig);
 
 // Optional Solana connection
 const connection = new Connection('https://api.mainnet-beta.solana.com');

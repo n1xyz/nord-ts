@@ -36,6 +36,8 @@ export class SolanaBridgeClient {
   /** Anchor provider */
   provider: AnchorProvider;
 
+  bridge: PublicKey;
+
   /**
    * Create a new Solana Bridge Client
    *
@@ -65,10 +67,18 @@ export class SolanaBridgeClient {
       { ...(BRIDGE_IDL as Idl), address: config.programId },
       provider,
     );
+
+    this.bridge = new PublicKey(config.bridgeVk);
   }
 
   /**
    * Derive a PDA (Program Derived Address) for the given seeds
+   *
+   * Seeds can be of type:
+   * - Buffer: raw bytes
+   * - PublicKey: Solana public key
+   * - string: string encoded as UTF-8 bytes
+   * - number: u64 encoded as little-endian 8 bytes
    *
    * @param type PDA seed type
    * @param seeds Additional seeds
@@ -76,7 +86,7 @@ export class SolanaBridgeClient {
    */
   async findPda(
     type: PdaSeedType,
-    ...seeds: (Buffer | PublicKey | string | number)[]
+    ...seeds: any[]
   ): Promise<[PublicKey, number]> {
     const seedBuffers = [
       Buffer.from(type),
@@ -90,21 +100,13 @@ export class SolanaBridgeClient {
           const buffer = Buffer.alloc(8);
           buffer.writeBigUInt64LE(BigInt(seed), 0);
           return buffer;
+        } else {
+          return seed.toBytes();
         }
-        return seed;
       }),
     ];
 
     return PublicKey.findProgramAddressSync(seedBuffers, this.programId);
-  }
-
-  /**
-   * Find the contract storage PDA
-   *
-   * @returns [PDA, bump]
-   */
-  async findContractStoragePda(): Promise<[PublicKey, number]> {
-    return this.findPda(PdaSeedType.ContractStorage);
   }
 
   /**
@@ -114,7 +116,7 @@ export class SolanaBridgeClient {
    * @returns [PDA, bump]
    */
   async findAssetConfigPda(mint: PublicKey): Promise<[PublicKey, number]> {
-    return this.findPda(PdaSeedType.AssetConfig, mint);
+    return this.findPda(PdaSeedType.AssetConfig, this.bridge, mint);
   }
 
   /**
@@ -126,7 +128,7 @@ export class SolanaBridgeClient {
   async findDepositStoragePda(
     depositIndex: number,
   ): Promise<[PublicKey, number]> {
-    return this.findPda(PdaSeedType.DepositStorage, depositIndex);
+    return this.findPda(PdaSeedType.DepositStorage, this.bridge, depositIndex);
   }
 
   /**
@@ -136,7 +138,7 @@ export class SolanaBridgeClient {
    * @returns [PDA, bump]
    */
   async findBlockStoragePda(blockId: number): Promise<[PublicKey, number]> {
-    return this.findPda(PdaSeedType.BlockStorage, blockId);
+    return this.findPda(PdaSeedType.BlockStorage, this.bridge, blockId);
   }
 
   /**
@@ -192,13 +194,11 @@ export class SolanaBridgeClient {
    * @returns Transaction signature
    */
   async depositSpl(params: DepositSplParams): Promise<string> {
-    const [contractStorage] = await this.findContractStoragePda();
     const [assetConfig] = await this.findAssetConfigPda(params.mint);
 
     // Get the last deposit index from contract storage
-    const contractStorageAccount =
-      await this.program.account.contractStorage.fetch(contractStorage);
-    const lastDepositIndex = contractStorageAccount.lastDepositIndex.toNumber();
+    const bridgeAccount = await this.program.account.bridge.fetch(this.bridge);
+    const lastDepositIndex = bridgeAccount.lastDepositIndex.toNumber();
 
     // Find the deposit PDA for this deposit
     const [deposit] = await this.findDepositStoragePda(lastDepositIndex + 1);
@@ -211,27 +211,47 @@ export class SolanaBridgeClient {
       prevDeposit = prevDepositPda;
     }
 
+    const tokenAuthority = (
+      await this.findPda(PdaSeedType.TokenAuthority, this.bridge)
+    )[0];
+    const crumbAuthority = (
+      await this.findPda(PdaSeedType.CrumbAuthority, this.bridge)
+    )[0];
+
+    const toAccount = await getAssociatedTokenAddress(
+      params.mint,
+      tokenAuthority,
+      true,
+      TOKEN_2022_PROGRAM_ID,
+    );
+
     // Build the transaction
     const accounts: any = {
-      depositor: this.provider.wallet.publicKey,
+      payer: this.provider.wallet.publicKey,
       deposit,
       assetConfig,
-      contractStorage,
+      bridge: this.bridge,
+      program: this.programId,
       fromAccount: params.fromAccount,
-      toAccount: params.toAccount,
+      toAccount: toAccount,
       tokenProgram: TOKEN_2022_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
+      crumbAuthority,
+      tokenAuthority,
     };
 
+    const allAccounts = { ...accounts, prevDeposit: prevDeposit };
+
     // Create the transaction
-    const tx = await this.program.methods
-      .depositSpl(params.amount)
-      .accounts({ ...accounts, prevDeposit: prevDeposit })
-      .transaction();
+    const tx = await (
+      await this.program.methods
+        .deposit(this.provider.wallet.publicKey, params.amount)
+        .accounts(allAccounts)
+    ).transaction();
 
     // Check if toAccount is initialized and add preinstruction if needed
     try {
-      await this.connection.getTokenAccountBalance(params.toAccount);
+      await this.connection.getTokenAccountBalance(toAccount);
     } catch {
       // Account doesn't exist, add instruction to create it
       // Get the authority PDA which is the owner of the toAccount
@@ -239,7 +259,7 @@ export class SolanaBridgeClient {
 
       const createTokenAccountIx = createAssociatedTokenAccountInstruction(
         this.provider.wallet.publicKey, // payer
-        params.toAccount, // associated token account address
+        toAccount, // associated token account address
         authority, // owner of the token account
         params.mint, // token mint
         TOKEN_2022_PROGRAM_ID,
@@ -297,7 +317,6 @@ export class SolanaBridgeClient {
    * @returns Transaction signature
    */
   async whitelistAsset(mint: PublicKey, signer: Keypair): Promise<string> {
-    const [contractStorage] = await this.findContractStoragePda();
     const [assetWhitelisted] = await this.findAssetConfigPda(mint);
 
     // Build the transaction
@@ -305,7 +324,7 @@ export class SolanaBridgeClient {
       .whitelistAsset(mint)
       .accounts({
         operator: signer.publicKey,
-        contractStorage,
+        bridge: this.bridge,
         assetWhitelisted,
         systemProgram: SystemProgram.programId,
       })
@@ -323,13 +342,10 @@ export class SolanaBridgeClient {
    * @returns Transaction signature
    */
   async proposeBlock(facts: BlockFacts, signer: Keypair): Promise<string> {
-    const [contractStorage] = await this.findContractStoragePda();
-
     // Get the last block ID from contract storage
-    const contractStorageAccount =
-      await this.program.account.contractStorage.fetch(contractStorage);
+    const bridgeAccount = await this.program.account.bridge.fetch(this.bridge);
     const [block] = await this.findBlockStoragePda(
-      contractStorageAccount.lastBlockId.toNumber() + 1,
+      bridgeAccount.lastBlockId.toNumber() + 1,
     );
 
     // Find the last deposit PDA
@@ -351,7 +367,7 @@ export class SolanaBridgeClient {
         block,
         lastDeposit,
         daFactState,
-        contractStorage,
+        bridge: this.bridge,
         systemProgram: SystemProgram.programId,
       })
       .transaction();
@@ -373,7 +389,6 @@ export class SolanaBridgeClient {
     stateUpdateId: number,
     signer: Keypair,
   ): Promise<string> {
-    const [contractStorage] = await this.findContractStoragePda();
     const [block] = await this.findBlockStoragePda(blockId);
 
     // Build the transaction
@@ -382,7 +397,7 @@ export class SolanaBridgeClient {
       .accounts({
         payer: signer.publicKey,
         block,
-        contractStorage,
+        bridge: this.bridge,
         systemProgram: SystemProgram.programId,
       })
       .transaction();
@@ -431,15 +446,13 @@ export class SolanaBridgeClient {
     initialAppStateCommitment: Buffer,
     signer: Keypair,
   ): Promise<string> {
-    const [contractStorage] = await this.findContractStoragePda();
-
     // Build the transaction
     const tx = await this.program.methods
       .initialize(operator, Array.from(initialAppStateCommitment))
       .accounts({
         payer: signer.publicKey,
         program: this.programId,
-        contractStorage,
+        bridge: this.bridge,
         systemProgram: SystemProgram.programId,
       })
       .transaction();

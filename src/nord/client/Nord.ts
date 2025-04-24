@@ -1,4 +1,5 @@
 import { EventEmitter } from "events";
+import { Connection, PublicKey } from "@solana/web3.js";
 import {
   Account,
   ActionQuery,
@@ -55,8 +56,11 @@ export class Nord {
   /** Base URL for the Nord web server */
   public readonly webServerUrl: string;
 
-  /** Solana program ID */
-  public readonly solanaProgramId: string;
+  /** Bridge verification key */
+  public readonly bridgeVk: string;
+
+  /** Optional Solana program ID (will be derived from bridgeVk) */
+  private _solanaProgramId!: string;
 
   /** Solana RPC URL */
   public readonly solanaUrl: string;
@@ -75,26 +79,26 @@ export class Nord {
    *
    * @param config - Configuration options for the Nord client
    * @param config.webServerUrl - Base URL for the Nord web server
-   * @param config.solanaProgramId - Solana program ID
+   * @param config.bridgeVk - Bridge verification key
    * @param config.solanaUrl - Solana cluster URL
    * @throws {Error} If required configuration is missing
    */
-  constructor({ webServerUrl, solanaProgramId, solanaUrl }: NordConfig) {
-    if (!webServerUrl) {
+  constructor(config: NordConfig) {
+    if (!config.webServerUrl) {
       throw new NordError("webServerUrl is required");
     }
 
-    if (!solanaProgramId) {
-      throw new NordError("solanaProgramId is required");
+    if (!config.bridgeVk) {
+      throw new NordError("bridgeVk is required");
     }
 
-    if (!solanaUrl) {
+    if (!config.solanaUrl) {
       throw new NordError("solanaUrl is required");
     }
 
-    this.webServerUrl = webServerUrl;
-    this.solanaProgramId = solanaProgramId;
-    this.solanaUrl = solanaUrl;
+    this.webServerUrl = config.webServerUrl;
+    this.bridgeVk = config.bridgeVk;
+    this.solanaUrl = config.solanaUrl;
   }
 
   /**
@@ -204,15 +208,47 @@ export class Nord {
    *
    * @param nordConfig - Configuration options for the Nord client
    * @param nordConfig.webServerUrl - Base URL for the Nord web server
-   * @param nordConfig.solanaProgramId - Solana program ID
+   * @param nordConfig.bridgeVk - Bridge verification key
    * @param nordConfig.solanaUrl - Solana cluster URL
    * @returns Initialized Nord client
    * @throws {NordError} If initialization fails
    */
   public static async initNord(nordConfig: NordConfig): Promise<Nord> {
     const nord = new Nord(nordConfig);
-    await nord.fetchNordInfo();
+    await nord.init();
     return nord;
+  }
+
+  /**
+   * Initialize the Nord client by deriving program ID and fetching info
+   * @private
+   */
+  private async init(): Promise<void> {
+    const connection = new Connection(this.solanaUrl);
+    const bridgeVkPubkey = new PublicKey(this.bridgeVk);
+
+    const bridgeAccount = await connection.getAccountInfo(bridgeVkPubkey);
+    if (!bridgeAccount) {
+      throw new NordError(`Bridge account ${this.bridgeVk} not found`);
+    }
+
+    this._solanaProgramId = bridgeAccount.owner.toString();
+    await this.fetchNordInfo();
+  }
+
+  /**
+   * Get the Solana program ID derived from bridge VK
+   *
+   * @returns Program ID string
+   * @throws {NordError} If program ID hasn't been initialized
+   */
+  public getSolanaProgramId(): string {
+    if (!this._solanaProgramId) {
+      throw new NordError(
+        "Solana program ID not initialized. Have you called Nord.initNord()?",
+      );
+    }
+    return this._solanaProgramId;
   }
 
   /**

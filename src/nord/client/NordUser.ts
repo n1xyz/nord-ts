@@ -300,7 +300,7 @@ export class NordUser {
     if (
       !this.getSolanaPublicKey() ||
       !this.connection ||
-      !this.nord.solanaProgramId
+      !this.nord.getSolanaProgramId()
     ) {
       throw new NordError(
         "Solana public key, connection, and program ID are required to initialize bridge client",
@@ -331,9 +331,10 @@ export class NordUser {
     this.bridgeClient = new SolanaBridgeClient(
       {
         rpcUrl: this.connection.rpcEndpoint,
-        programId: this.nord.solanaProgramId,
+        programId: this.nord.getSolanaProgramId(),
         commitment: "confirmed",
         tokenInfos: this.splTokenInfos,
+        bridgeVk: this.nord.bridgeVk,
       },
       wallet,
     );
@@ -462,16 +463,6 @@ export class NordUser {
       const mint = new PublicKey(tokenInfo.mint);
       // Get the user's token account
       const fromAccount = await this.getAssociatedTokenAccount(mint);
-
-      // Get the bridge's token account
-      const [authority] = await this.bridgeClient.findAuthorityPda();
-      const toAccount = await getAssociatedTokenAddress(
-        mint,
-        authority,
-        true,
-        TOKEN_2022_PROGRAM_ID,
-      );
-
       // Convert amount to BN with proper decimals
       const amountBN = utilsToBN(amount, tokenInfo.precision);
 
@@ -480,7 +471,6 @@ export class NordUser {
         amount: amountBN,
         mint,
         fromAccount,
-        toAccount,
       });
     } catch (error) {
       throw new NordError(

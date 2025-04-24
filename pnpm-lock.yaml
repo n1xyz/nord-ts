@@ -88,7 +88,7 @@ importers:
         specifier: ^10.9.2
         version: 10.9.2(@types/node@20.17.30)(typescript@5.8.3)
       ts-proto:
-        specifier: ^2.2.0
+        specifier: ^2.7.0
         version: 2.7.0
       typedoc:
         specifier: ^0.27.9

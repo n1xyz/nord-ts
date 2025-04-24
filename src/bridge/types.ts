@@ -9,6 +9,8 @@ export interface SolanaBridgeConfig {
   rpcUrl: string;
   /** Program ID for the bridge program */
   programId: string;
+  /** Bridge Verifying Key */
+  bridgeVk: string;
   /** Commitment level for transactions */
   commitment: "processed" | "confirmed" | "finalized";
   /** Token information for supported SPL tokens */
@@ -39,8 +41,6 @@ export interface DepositSplParams {
   mint: PublicKey;
   /** User's token account to deposit from */
   fromAccount: PublicKey;
-  /** Bridge's token account to deposit to */
-  toAccount: PublicKey;
 }
 
 /**
@@ -117,7 +117,9 @@ export interface TransferParams {
  * PDA seed types
  */
 export enum PdaSeedType {
-  ContractStorage = "contract_storage",
+  Bridge = "bridge",
+  TokenAuthority = "token_authority",
+  CrumbAuthority = "crumb_authority",
   AssetConfig = "asset_config",
   DepositStorage = "deposit_storage",
   BlockStorage = "block_storage",
