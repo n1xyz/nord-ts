@@ -145,9 +145,7 @@ export class NordWebSocketClient
   private getWebSocketClass(): any {
     if (this.isBrowser) {
       // In browser environments
-      // @ts-expect-error - Check for WebSocket in globalThis
       if (typeof globalThis !== "undefined" && globalThis.WebSocket) {
-        // @ts-expect-error - Return WebSocket from globalThis
         return globalThis.WebSocket;
       }
       throw new Error("WebSocket is not available in this environment");

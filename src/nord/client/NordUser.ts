@@ -6,7 +6,9 @@ import {
 } from "@solana/spl-token";
 import { Connection, Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import Decimal from "decimal.js";
-import * as nacl from "tweetnacl";
+import * as ed from "@noble/ed25519";
+import { sha512 } from "@noble/hashes/sha512";
+ed.etc.sha512Sync = sha512;
 import { SolanaBridgeClient } from "../../bridge/client";
 import { SPLTokenInfo } from "../../bridge/types";
 import { keypairFromPrivateKey } from "../../bridge/utils";
@@ -362,21 +364,28 @@ export class NordUser {
       const walletSignFn = async (
         message: Uint8Array | string,
       ): Promise<Uint8Array> => {
-        const messageBuffer =
-          typeof message === "string"
-            ? Buffer.from(message)
-            : Buffer.from(message);
+        function toHex(buffer: Uint8Array) {
+          return Array.from(buffer)
+            .map((byte) => byte.toString(16).padStart(2, "0"))
+            .join("");
+        }
+        const messageBuffer = new TextEncoder().encode(
+          toHex(message as Uint8Array),
+        );
 
-        // Use the keypair to sign the message
-        const signature = nacl.sign.detached(messageBuffer, keypair.secretKey);
+        // Use ed25519 to sign the message
+        const signature = ed.sign(
+          messageBuffer,
+          keypair.secretKey.slice(0, 32),
+        );
         return signature;
       };
 
       const sessionSignFn = async (
         message: Uint8Array,
       ): Promise<Uint8Array> => {
-        // Use the keypair to sign the message
-        return nacl.sign.detached(message, keypair.secretKey);
+        // Use ed25519 to sign the message
+        return ed.sign(message, keypair.secretKey.slice(0, 32));
       };
 
       // Create a transaction signing function
