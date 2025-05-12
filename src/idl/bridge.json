@@ -1,0 +1,1493 @@
+{
+  "address": "",
+  "metadata": {
+    "name": "bridge",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "deposit",
+      "discriminator": [
+        242,
+        35,
+        198,
+        137,
+        82,
+        225,
+        242,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "bridge",
+          "writable": true
+        },
+        {
+          "name": "deposit",
+          "writable": true
+        },
+        {
+          "name": "prev_deposit",
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  95,
+                  115,
+                  116,
+                  111,
+                  114,
+                  97,
+                  103,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bridge"
+              },
+              {
+                "kind": "account",
+                "path": "bridge.last_deposit_index",
+                "account": "Bridge"
+              }
+            ]
+          }
+        },
+        {
+          "name": "asset_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bridge"
+              },
+              {
+                "kind": "account",
+                "path": "from_account.mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "from_account",
+          "writable": true
+        },
+        {
+          "name": "to_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "token_authority"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "from_account.mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "token_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bridge"
+              }
+            ]
+          }
+        },
+        {
+          "name": "crumb_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  117,
+                  109,
+                  98,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bridge"
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "user",
+          "type": "pubkey"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "emit_crumb",
+      "discriminator": [
+        96,
+        96,
+        18,
+        122,
+        83,
+        60,
+        102,
+        37
+      ],
+      "accounts": [
+        {
+          "name": "bridge"
+        },
+        {
+          "name": "crumb_authority",
+          "docs": [
+            "Need a PDA to ensure that only this contract is allowed to",
+            "call this instruction; the contract storage account is",
+            "chosen since pretty much every other ix uses it, so this",
+            "avoids having to introduce a new account."
+          ],
+          "signer": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  117,
+                  109,
+                  98,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bridge"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "finalize_block",
+      "discriminator": [
+        63,
+        101,
+        92,
+        132,
+        135,
+        251,
+        98,
+        177
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "bridge",
+          "writable": true
+        },
+        {
+          "name": "block",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  108,
+                  111,
+                  99,
+                  107,
+                  95,
+                  115,
+                  116,
+                  111,
+                  114,
+                  97,
+                  103,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bridge"
+              },
+              {
+                "kind": "arg",
+                "path": "block_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "crumb_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  117,
+                  109,
+                  98,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bridge"
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "state_update_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "finalize_da_fact",
+      "discriminator": [
+        6,
+        135,
+        30,
+        141,
+        5,
+        246,
+        223,
+        58
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "bridge"
+        },
+        {
+          "name": "fact_state_storage",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  97,
+                  95,
+                  102,
+                  97,
+                  99,
+                  116,
+                  95,
+                  115,
+                  116,
+                  111,
+                  114,
+                  97,
+                  103,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bridge"
+              },
+              {
+                "kind": "arg",
+                "path": "fact"
+              }
+            ]
+          }
+        },
+        {
+          "name": "crumb_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  117,
+                  109,
+                  98,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bridge"
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "fact",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "initialize_bridge",
+      "discriminator": [
+        6,
+        173,
+        152,
+        229,
+        35,
+        112,
+        127,
+        151
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "program",
+          "signer": true
+        },
+        {
+          "name": "bridge",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "operator",
+          "type": "pubkey"
+        },
+        {
+          "name": "challenge_period_slots",
+          "type": "u64"
+        },
+        {
+          "name": "initial_app_state_commitment",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "propose_block",
+      "discriminator": [
+        147,
+        21,
+        105,
+        53,
+        152,
+        116,
+        128,
+        187
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "bridge",
+          "writable": true
+        },
+        {
+          "name": "operator",
+          "signer": true
+        },
+        {
+          "name": "block",
+          "writable": true
+        },
+        {
+          "name": "last_deposit",
+          "optional": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  95,
+                  115,
+                  116,
+                  111,
+                  114,
+                  97,
+                  103,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bridge"
+              },
+              {
+                "kind": "arg",
+                "path": "facts.next_state_facts.last_deposit_index"
+              }
+            ]
+          }
+        },
+        {
+          "name": "da_fact_state"
+        },
+        {
+          "name": "crumb_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  117,
+                  109,
+                  98,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bridge"
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "facts",
+          "type": {
+            "defined": {
+              "name": "BlockFacts"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_min_deposit",
+      "discriminator": [
+        15,
+        182,
+        74,
+        248,
+        251,
+        148,
+        186,
+        171
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "bridge"
+        },
+        {
+          "name": "operator",
+          "signer": true
+        },
+        {
+          "name": "asset_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bridge"
+              },
+              {
+                "kind": "arg",
+                "path": "asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "crumb_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  117,
+                  109,
+                  98,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bridge"
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "asset",
+          "type": "pubkey"
+        },
+        {
+          "name": "min_deposit",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "whitelist_asset",
+      "discriminator": [
+        113,
+        64,
+        172,
+        191,
+        33,
+        33,
+        57,
+        18
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "bridge"
+        },
+        {
+          "name": "operator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "asset_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  115,
+                  115,
+                  101,
+                  116,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bridge"
+              },
+              {
+                "kind": "arg",
+                "path": "asset"
+              }
+            ]
+          }
+        },
+        {
+          "name": "crumb_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  117,
+                  109,
+                  98,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bridge"
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "asset",
+          "type": "pubkey"
+        },
+        {
+          "name": "min_deposit",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "withdraw",
+      "discriminator": [
+        183,
+        18,
+        70,
+        156,
+        148,
+        109,
+        161,
+        34
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "bridge"
+        },
+        {
+          "name": "block",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  108,
+                  111,
+                  99,
+                  107,
+                  95,
+                  115,
+                  116,
+                  111,
+                  114,
+                  97,
+                  103,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bridge"
+              },
+              {
+                "kind": "arg",
+                "path": "claim.block_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "effect_nullifier",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  102,
+                  102,
+                  101,
+                  99,
+                  116,
+                  95,
+                  110,
+                  117,
+                  108,
+                  108,
+                  105,
+                  102,
+                  105,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bridge"
+              },
+              {
+                "kind": "arg",
+                "path": "claim.block_id"
+              },
+              {
+                "kind": "arg",
+                "path": "claim.leaf_index"
+              }
+            ]
+          }
+        },
+        {
+          "name": "from_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "token_authority"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "to_account.mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "to_account",
+          "writable": true
+        },
+        {
+          "name": "token_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bridge"
+              }
+            ]
+          }
+        },
+        {
+          "name": "crumb_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  117,
+                  109,
+                  98,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bridge"
+              }
+            ]
+          }
+        },
+        {
+          "name": "program"
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "claim",
+          "type": {
+            "defined": {
+              "name": "WithdrawalClaim"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "AssetConfig",
+      "discriminator": [
+        57,
+        112,
+        247,
+        166,
+        247,
+        64,
+        140,
+        23
+      ]
+    },
+    {
+      "name": "Block",
+      "discriminator": [
+        12,
+        72,
+        207,
+        108,
+        1,
+        228,
+        167,
+        221
+      ]
+    },
+    {
+      "name": "Bridge",
+      "discriminator": [
+        231,
+        232,
+        31,
+        98,
+        110,
+        3,
+        23,
+        59
+      ]
+    },
+    {
+      "name": "Deposit",
+      "discriminator": [
+        148,
+        146,
+        121,
+        66,
+        207,
+        173,
+        21,
+        227
+      ]
+    },
+    {
+      "name": "EffectNullifier",
+      "discriminator": [
+        138,
+        66,
+        66,
+        124,
+        33,
+        209,
+        105,
+        159
+      ]
+    },
+    {
+      "name": "FactStateStorage",
+      "discriminator": [
+        98,
+        222,
+        3,
+        112,
+        154,
+        244,
+        201,
+        242
+      ]
+    }
+  ],
+  "types": [
+    {
+      "name": "AssetConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "min_deposit",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Block",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "facts",
+            "type": {
+              "defined": {
+                "name": "BlockFacts"
+              }
+            }
+          },
+          {
+            "name": "finalized",
+            "type": "bool"
+          },
+          {
+            "name": "slot_proposed",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BlockFacts",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "prev_state_facts",
+            "type": {
+              "defined": {
+                "name": "StateFacts"
+              }
+            }
+          },
+          {
+            "name": "next_state_facts",
+            "type": {
+              "defined": {
+                "name": "StateFacts"
+              }
+            }
+          },
+          {
+            "name": "da_commitment",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "effects_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Bridge",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "operator",
+            "type": "pubkey"
+          },
+          {
+            "name": "challenge_period_slots",
+            "type": "u64"
+          },
+          {
+            "name": "last_block_id",
+            "type": "u64"
+          },
+          {
+            "name": "last_deposit_index",
+            "type": "u64"
+          },
+          {
+            "name": "fina_block_id",
+            "type": "u64"
+          },
+          {
+            "name": "fina_state_facts",
+            "type": {
+              "defined": {
+                "name": "StateFacts"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Deposit",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "transfer",
+            "type": {
+              "defined": {
+                "name": "TransferParams"
+              }
+            }
+          },
+          {
+            "name": "prev_deposit_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "EffectNullifier",
+      "type": {
+        "kind": "struct",
+        "fields": []
+      }
+    },
+    {
+      "name": "FactState",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Pending"
+          },
+          {
+            "name": "Finalized"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FactStateStorage",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "state",
+            "type": {
+              "defined": {
+                "name": "FactState"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "StateFacts",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "app_state_commitment",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "deposit_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "last_deposit_index",
+            "type": "u64"
+          },
+          {
+            "name": "last_action_id",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TransferParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WithdrawalClaim",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "block_id",
+            "type": "u64"
+          },
+          {
+            "name": "proof",
+            "type": {
+              "vec": {
+                "array": [
+                  "u8",
+                  32
+                ]
+              }
+            }
+          },
+          {
+            "name": "leaf_index",
+            "type": "u64"
+          },
+          {
+            "name": "leaves_count",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}
