@@ -1,0 +1,323 @@
+import * as proto from "./gen/nord";
+import type { components } from "./gen/openapi.ts";
+
+/**
+ * The peak TPS rate is queried over the specified period.
+ * The period is specified in units of: {hour, day, week, month, year}.
+ * Example inputs:
+ *  1. AggregateMetrics.txPeakTpsPeriod = 3,
+ *     AggregateMetrics.txPeakTpsPeriodUnit = "d" => Peak TPS over last 3 days.
+ *  1. AggregateMetrics.txPeakTpsPeriod = 1,
+ *     AggregateMetrics.txPeakTpsPeriodUnit = "w" => Peak TPS over last week.
+ */
+export enum PeakTpsPeriodUnit {
+  Hour = "h",
+  Day = "d",
+  Week = "w",
+  Month = "m",
+  Year = "y",
+}
+
+/**
+ * Nord subscription type for trades or deltas
+ */
+export type SubscriptionType = "trades" | "deltas" | "account";
+
+/**
+ * Pattern for a valid Nord subscription
+ * Format should be: "<type>@<parameter>"
+ * Examples: "trades@BTCUSDC", "deltas@ETHUSDC", "account@42"
+ */
+export type SubscriptionPattern = `${SubscriptionType}@${string}` | string;
+
+/**
+ * Configuration options for the Nord client
+ */
+export interface NordConfig {
+  /** Base URL for the Nord web server */
+  webServerUrl: string;
+  /** Bridge verification key */
+  bridgeVk: string;
+  /** Solana cluster URL */
+  solanaUrl: string;
+  /**
+   * Whether to initialize WebSockets on creation, defaults to true
+   * @deprecated this is a funky api we're gonna be removing it
+   */
+  initWebSockets?: boolean;
+}
+
+export type Info = components["schemas"]["Info2"];
+export type Market = Info["markets"][number];
+export type Token = Info["tokens"][number];
+export type Account = components["schemas"]["Account"];
+export type TradesResponse =
+  components["schemas"]["PageResult_for_String_and_Trade"];
+export type User = components["schemas"]["User"];
+export type OrderbookResponse = components["schemas"]["OrderbookInfo"];
+export type MarketStats = components["schemas"]["MarketStats"];
+export type OrderbookInfo = components["schemas"]["OrderbookInfo"];
+export type MarketStatsFromApi = components["schemas"]["MarketStats"];
+export type TradeFromApi = components["schemas"]["Trade"];
+// Generic PageResult type - note that K and V must match existing schema keys
+export type PageResult<K extends string, V extends string> = K extends "String"
+  ? V extends "OrderInfo"
+    ? components["schemas"]["PageResult_for_String_and_OrderInfo"]
+    : V extends "Trade"
+      ? components["schemas"]["PageResult_for_String_and_Trade"]
+      : never
+  : never;
+export type PageResultStringOrderInfo =
+  components["schemas"]["PageResult_for_String_and_OrderInfo"];
+export type PageResultStringTrade =
+  components["schemas"]["PageResult_for_String_and_Trade"];
+export type OrderInfoFromApi = components["schemas"]["OrderInfo"];
+export type OpenOrder = components["schemas"]["OpenOrder"];
+export type Balance = components["schemas"]["Balance"];
+export type PositionSummary = components["schemas"]["PositionSummary"];
+export type PerpPosition = components["schemas"]["PerpPosition"];
+export type AccountMarginsView = components["schemas"]["AccountMarginsView"];
+export type SideSummary = components["schemas"]["SideSummary"];
+export type UserSession = components["schemas"]["UserSession"];
+export type ActionsItem = components["schemas"]["ActionsItem"];
+export type FillRole = components["schemas"]["FillRole"];
+export type PerpMarketStatsFromApi = components["schemas"]["PerpMarketStats"];
+export type SideFromApi = components["schemas"]["Side"];
+export type FillModeFromApi = components["schemas"]["FillMode"];
+export type PlacementOrigin = components["schemas"]["PlacementOrigin"];
+export type FinalizationReason = components["schemas"]["FinalizationReason"];
+
+/**
+ * Configuration options for the Nord client
+ */
+export interface TokenInfo {
+  address: string;
+  precision: number;
+  tokenId: number;
+  name: string;
+}
+
+export interface Order {
+  orderId: number;
+  isLong: boolean;
+  size: number;
+  price: number;
+  marketId: number;
+}
+
+export enum KeyType {
+  Ed25519,
+  Secp256k1,
+  Bls12_381,
+}
+
+export enum Side {
+  Ask,
+  Bid,
+}
+
+export enum FillMode {
+  Limit,
+  PostOnly,
+  ImmediateOrCancel,
+  FillOrKill,
+}
+
+export interface SubscriberConfig {
+  streamURL: string;
+  maxBufferLen?: number;
+}
+
+export interface DeltaEvent {
+  last_update_id: number;
+  update_id: number;
+  market_symbol: string;
+  asks: OrderbookEntry[];
+  bids: OrderbookEntry[];
+}
+
+export interface StreamTrade {
+  side: Side;
+  price: number;
+  size: number;
+  order_id: number;
+}
+
+export interface Trades {
+  last_update_id: number;
+  update_id: number;
+  market_symbol: string;
+  trades: StreamTrade[];
+}
+
+export interface LocalOrderInfo {
+  id: number;
+  reduce_only: boolean;
+  limit_price: number;
+  size: number;
+  account_id: number;
+  sender_tracking_id?: number;
+}
+
+export interface HashMap<T> {
+  [key: number]: T;
+}
+
+export interface ActionResponse {
+  actionId: number;
+  action: proto.Action;
+  physicalExecTime: Date;
+}
+
+/**
+ * Block summary.
+ * block_number Block number.
+ * from_action_id First action_id in the block.
+ * to_action_id Last action_id in the block.
+ */
+export interface BlockSummary {
+  block_number: number;
+  from_action_id: number;
+  to_action_id: number;
+}
+
+/**
+ * Aggregate metrics
+ * blocks_total: Total number of L2 blocks.
+ * tx_total: Total number of transactions.
+ * tx_tps: Transaction throughput.
+ * tx_tps_peak: Peak transaction throughput.
+ * request_latency_average: Average request latency.
+ */
+export interface AggregateMetrics {
+  blocks_total: number;
+  tx_total: number;
+  tx_tps: number;
+  tx_tps_peak: number;
+  request_latency_average: number;
+}
+
+/**
+ * Converts a `FillMode` enum to its corresponding protobuf representation.
+ *
+ * @param x - The fill mode to convert.
+ * @returns The corresponding protobuf fill mode.
+ * @throws Will throw an error if provided with an invalid fill mode.
+ */
+export function fillModeToProtoFillMode(x: FillMode): proto.FillMode {
+  if (x === FillMode.Limit) return proto.FillMode.LIMIT;
+  if (x === FillMode.PostOnly) return proto.FillMode.POST_ONLY;
+  if (x === FillMode.ImmediateOrCancel) {
+    return proto.FillMode.IMMEDIATE_OR_CANCEL;
+  }
+  if (x === FillMode.FillOrKill) return proto.FillMode.FILL_OR_KILL;
+  throw new Error("Invalid fill mode");
+}
+
+/**
+ * Query parameters for trades endpoint
+ */
+export interface TradesQuery {
+  accountId: number;
+  since?: string; // RFC3339 timestamp
+  until?: string; // RFC3339 timestamp
+  pageId?: string;
+}
+
+/**
+ * Orderbook entry representing price and size
+ */
+export interface OrderbookEntry {
+  price: number;
+  size: number;
+}
+
+/**
+ * Query parameters for orderbook
+ *
+ * Note: While you can provide either symbol or market_id, the API endpoint only accepts market_id.
+ * If you provide a symbol, it will be converted to a market_id internally.
+ */
+export interface OrderbookQuery {
+  symbol?: string;
+  market_id?: number;
+}
+
+/**
+ * Response for timestamp query
+ */
+export interface TimestampResponse {
+  timestamp: number; // engine's current logical timestamp
+}
+
+/**
+ * Response for action nonce query
+ */
+export interface ActionNonceResponse {
+  nonce: number; // next expected action nonce
+}
+
+/**
+ * WebSocket message types
+ */
+export enum WebSocketMessageType {
+  Subscribe = "subscribe",
+  Unsubscribe = "unsubscribe",
+  TradeUpdate = "trades",
+  DeltaUpdate = "delta",
+  AccountUpdate = "account",
+}
+
+/**
+ * WebSocket subscription request
+ */
+export interface WebSocketSubscription {
+  e: WebSocketMessageType;
+  streams: string[]; // Array of streams to subscribe/unsubscribe (e.g. ["trades@BTCUSDC", "deltas@BTCUSDC"])
+}
+
+/**
+ * WebSocket trade update message
+ */
+export interface WebSocketTradeUpdate {
+  e: WebSocketMessageType.TradeUpdate;
+  symbol: string;
+  trades: StreamTrade[];
+  timestamp: number;
+}
+
+/**
+ * WebSocket delta update message
+ */
+export interface WebSocketDeltaUpdate {
+  e: WebSocketMessageType.DeltaUpdate;
+  last_update_id: number;
+  update_id: number;
+  market_symbol: string;
+  asks: OrderbookEntry[];
+  bids: OrderbookEntry[];
+  timestamp: number;
+}
+
+/**
+ * WebSocket user update message
+ */
+export interface WebSocketAccountUpdate {
+  e: WebSocketMessageType.AccountUpdate;
+  accountId: number;
+  account: Account;
+  timestamp: number;
+}
+
+export type WebSocketMessage =
+  | WebSocketSubscription
+  | WebSocketTradeUpdate
+  | WebSocketDeltaUpdate
+  | WebSocketAccountUpdate;
+
+export interface SPLTokenInfo {
+  mint: string;
+  precision: number;
+  tokenId: number;
+  name: string;
+}

@@ -1,0 +1,6 @@
+/docs/
+/src/gen/
+.idea
+node_modules
+dist
+!tsconfig.eslint.json

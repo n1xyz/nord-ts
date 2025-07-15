@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "declaration": true,
+    "target": "es2020",
+    "lib": ["es2020", "dom"],
+    "module": "commonjs",
+    "rootDir": "./src",
+    "moduleResolution": "Node",
+    "outDir": "./dist",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+  },
+  "typeAcquisition": {
+    "include": [
+      "jest",
+      "@types/jest"
+    ]
+  },
+  "exclude": ["dist", "**/node_modules/**/*"],
+  "include": ["./src/**/*"]
+}
