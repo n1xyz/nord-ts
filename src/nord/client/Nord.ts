@@ -73,7 +73,7 @@ export class Nord {
   /** Map of symbol to market_id */
   private symbolToMarketId: Map<string, number> = new Map();
 
-  /** Proton client for bridge and indexd operations */
+  /** Proton client for bridge and hansel operations */
   public protonClient: ProtonClient;
 
   /** HTTP client for Nord operations */
