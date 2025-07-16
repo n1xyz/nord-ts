@@ -215,16 +215,6 @@ export function fillModeToProtoFillMode(x: FillMode): proto.FillMode {
 }
 
 /**
- * Query parameters for trades endpoint
- */
-export interface TradesQuery {
-  accountId: number;
-  since?: string; // RFC3339 timestamp
-  until?: string; // RFC3339 timestamp
-  pageId?: string;
-}
-
-/**
  * Orderbook entry representing price and size
  */
 export interface OrderbookEntry {

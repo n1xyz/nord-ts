@@ -25,6 +25,12 @@ export function panic(message: string): never {
   throw new Error(message);
 }
 
+export function isRfc3339(s: string): boolean {
+  const REGEX =
+    /^((?:(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2}(?:\.\d+)?))(Z|[\+-]\d{2}:\d{2})?)$/;
+  return REGEX.test(s);
+}
+
 export function assert(predicate: boolean, message?: string): void {
   if (!predicate) panic(message ?? "Assertion violated");
 }
@@ -37,26 +43,6 @@ export function assert(predicate: boolean, message?: string): void {
 export function optExpect<T>(value: T | undefined, message: string): T {
   if (value === undefined) throw new Error(message);
   return value as T;
-}
-/**
- * Unwraps optional value with default error message
- * @param value
- * @returns
- */
-export function optUnwrap<T>(value: T | undefined): T {
-  return optExpect(value, "Optional contains no value");
-}
-/**
- * Applies function to value if it's defined, or passes `undefined` through
- * @param value Optional value to map
- * @param mapFn Mapper function
- * @returns     Either mapped value or undefined
- */
-export function optMap<T, U>(
-  value: T | undefined,
-  mapFn: (arg: T) => U,
-): U | undefined {
-  return value !== undefined ? mapFn(value) : undefined;
 }
 /** Behaves same as `node-fetch/fetch` but throws if response is a failure
  *

@@ -177,9 +177,6 @@ export class NordUser {
     [key: string]: { accountId: number; balance: number; symbol: string }[];
   } = {};
 
-  /** User orders by market symbol */
-  public orders: { [key: string]: Order[] } = {};
-
   /** User positions by account ID */
   public positions: {
     [key: string]: {
@@ -315,7 +312,6 @@ export class NordUser {
 
     // Copy other properties
     cloned.balances = { ...this.balances };
-    cloned.orders = { ...this.orders };
     cloned.positions = { ...this.positions };
     cloned.margins = { ...this.margins };
     cloned.accountIds = this.accountIds ? [...this.accountIds] : undefined;
@@ -458,6 +454,7 @@ export class NordUser {
    * @param tokenId - Token ID
    * @param recipient - Recipient address; defaults to the user's address
    * @returns Transaction signature
+   * @deprecated Use deposit instead
    * @throws {NordError} If required parameters are missing or operation fails
    */
   async depositSpl(
@@ -465,6 +462,27 @@ export class NordUser {
     tokenId: number,
     recipient?: PublicKey,
   ): Promise<string> {
+    return this.deposit({ amount, tokenId, recipient });
+  }
+
+  /**
+   * Deposit SPL tokens to the bridge
+   *
+   * @param amount - Amount to deposit
+   * @param tokenId - Token ID
+   * @param recipient - Recipient address; defaults to the user's address
+   * @returns Transaction signature
+   * @throws {NordError} If required parameters are missing or operation fails
+   */
+  async deposit({
+    amount,
+    tokenId,
+    recipient,
+  }: Readonly<{
+    amount: number;
+    tokenId: number;
+    recipient?: PublicKey;
+  }>): Promise<string> {
     try {
       // Find the token info
       const tokenInfo = this.splTokenInfos.find((t) => t.tokenId === tokenId);
@@ -624,19 +642,6 @@ export class NordUser {
           });
         }
 
-        // Process orders
-        this.orders[accountData.accountId] = accountData.orders.map(
-          (order: OpenOrder) => {
-            return {
-              orderId: order.orderId,
-              isLong: order.side === "bid",
-              size: order.size,
-              price: order.price,
-              marketId: order.marketId,
-            };
-          },
-        );
-
         // Process positions
         this.positions[accountData.accountId] = accountData.positions;
 
@@ -707,10 +712,13 @@ export class NordUser {
    * @param amount - Amount to withdraw
    * @throws {NordError} If the operation fails
    */
-  async withdraw(
-    tokenId: number,
-    amount: number,
-  ): Promise<{ actionId: bigint }> {
+  async withdraw({
+    amount,
+    tokenId,
+  }: Readonly<{
+    tokenId: number;
+    amount: number;
+  }>): Promise<{ actionId: bigint }> {
     try {
       this.checkSessionValidity();
       const { actionId } = await withdraw(
@@ -854,62 +862,6 @@ export class NordUser {
     providedAccountId?: number,
   ): Promise<proto.Receipt_AtomicResult> {
     try {
-      // Validate per-market ordering: cancels first, then trades, then placements
-      const phasePerMarket = new Map<number, number>(); // 0 – cancel phase, 1 – trade phase, 2 – place phase
-      const classify = (
-        act: UserAtomicSubaction,
-      ): "cancel" | "trade" | "place" => {
-        if (act.kind === "cancel") return "cancel";
-        // Treat IOC/FOC orders as trades, everything else as placement
-        return act.fillMode === FillMode.ImmediateOrCancel ||
-          act.fillMode === FillMode.FillOrKill
-          ? "trade"
-          : "place";
-      };
-      for (let i = 0; i < userActions.length; i++) {
-        const act = userActions[i];
-        const category = classify(act);
-        let marketId: number | undefined;
-
-        if (act.kind === "place") {
-          marketId = act.marketId;
-        } else {
-          // cancel – try to resolve market id from cached orders; if not found, skip validation for this entry
-          marketId = this.getMarketIdFromOrderId(act.orderId!);
-        }
-
-        if (marketId === undefined) {
-          throw new NordError(
-            `Cannot determine market ID for action ${i}: ${act.kind === "place" ? "invalid marketId" : "order ID not found in cached orders"}`,
-          );
-        }
-
-        const currentPhase = phasePerMarket.get(marketId) ?? 0;
-        switch (category) {
-          case "cancel": {
-            if (currentPhase > 0) {
-              throw new NordError(
-                `Invalid atomic sequence: cancel action for market ${marketId} must precede trades and placements`,
-              );
-            }
-            break;
-          }
-          case "trade": {
-            if (currentPhase === 2) {
-              throw new NordError(
-                `Invalid atomic sequence: trade action for market ${marketId} must precede placements`,
-              );
-            }
-            phasePerMarket.set(marketId, 1);
-            break;
-          }
-          case "place": {
-            phasePerMarket.set(marketId, 2);
-            break;
-          }
-        }
-      }
-
       this.checkSessionValidity();
 
       const accountId =
@@ -1128,23 +1080,5 @@ export class NordUser {
    */
   getSolanaPublicKey(): PublicKey {
     return this.address;
-  }
-
-  /**
-   * Get marketId for a given orderId
-   * @param orderId - Order ID to look up
-   * @returns Market ID if found, undefined otherwise
-   */
-  getMarketIdFromOrderId(orderId: BigIntValue): number | undefined {
-    // Search through all account orders
-    for (const accountOrders of Object.values(this.orders)) {
-      const order = accountOrders.find(
-        (o) => BigInt(o.orderId) === BigInt(orderId),
-      );
-      if (order) {
-        return order.marketId;
-      }
-    }
-    return undefined;
   }
 }

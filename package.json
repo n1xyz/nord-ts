@@ -8,7 +8,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "gen:proto": "./protoc-generate.sh",
+    "gen:proto": "nix run ..#nord-ts-proto ../engine/nord.proto src/gen/",
     "gen:api": "nix run ..#nord-openapi | bunx openapi-typescript > src/gen/openapi.ts",
     "gen": "bun run gen:proto && bun run gen:api",
     "build": "bun run gen && bunx tsc && bun run docs",
@@ -31,7 +31,6 @@
     "openapi-typescript": "^7.8.0",
     "prettier": "^3.5.3",
     "ts-node": "^10.9.2",
-    "ts-proto": "^2.7.0",
     "typedoc": "^0.27.9",
     "typescript": "*"
   },

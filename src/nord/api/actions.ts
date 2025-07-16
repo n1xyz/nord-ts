@@ -8,7 +8,6 @@ import {
   checkPubKeyLength,
   decodeLengthDelimited,
   encodeLengthDelimited,
-  optMap,
   SESSION_TTL,
   toScaledU64,
 } from "../../utils";
@@ -299,7 +298,10 @@ async function placeOrderImpl(
         price,
         size,
         quoteSize: { size: quoteSize, price: quotePrice },
-        clientOrderId: optMap(params.clientOrderId, (x) => BigInt(x)),
+        clientOrderId:
+          params.clientOrderId === undefined
+            ? undefined
+            : BigInt(params.clientOrderId),
         delegatorAccountId: params.liquidateeId,
       },
     },
@@ -540,7 +542,8 @@ async function atomicImpl(
           size,
           quoteSize: { size: quoteSizeSize, price: quoteSizePrice },
         },
-        clientOrderId: optMap(a.clientOrderId, (x) => BigInt(x)),
+        clientOrderId:
+          a.clientOrderId === undefined ? undefined : BigInt(a.clientOrderId),
       };
       return {
         inner: { $case: "tradeOrPlace", value: tradeOrPlace },

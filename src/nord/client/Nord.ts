@@ -1,10 +1,6 @@
 import { EventEmitter } from "events";
 import { PublicKey, Connection } from "@solana/web3.js";
-import createClient, {
-  Client,
-  FetchResponse,
-  FetchOptions,
-} from "openapi-fetch";
+import createClient, { Client, FetchOptions } from "openapi-fetch";
 import {
   Info,
   Account,
@@ -17,7 +13,6 @@ import {
   PeakTpsPeriodUnit,
   SubscriptionPattern,
   Token,
-  TradesQuery,
   TradesResponse,
   User,
   MarketStats,
@@ -28,6 +23,7 @@ import * as proto from "../../gen/nord";
 import { NordWebSocketClient } from "../../websocket/index";
 import * as core from "../api/core";
 import * as metrics from "../api/metrics";
+import * as utils from "../../utils";
 import { OrderbookSubscription, TradeSubscription } from "../models/Subscriber";
 import { NordError } from "../utils/NordError";
 import type { paths } from "../../gen/openapi.ts";
@@ -301,15 +297,17 @@ export class Nord {
     from: number;
     to: number;
   }): Promise<ActionResponse[]> {
-    const actionsItems = await this.GET("/action", {
+    const xs = await this.GET("/action", {
       params: {
         query,
       },
     });
-
-    return actionsItems.map((x) => ({
+    return xs.map((x) => ({
       actionId: x.actionId,
-      action: proto.Action.decode(Buffer.from(x.payload, "base64")),
+      action: utils.decodeLengthDelimited(
+        Buffer.from(x.payload, "base64"),
+        proto.Action,
+      ),
       physicalExecTime: new Date(x.physicalTime * 1000),
     }));
   }
@@ -524,13 +522,34 @@ export class Nord {
    * @returns Trades response
    * @throws {NordError} If the request fails
    */
-  public async getTrades(query: TradesQuery): Promise<TradesResponse> {
+  public async getTrades(
+    query: Readonly<{
+      marketId?: number;
+      takerId?: number;
+      makerId?: number;
+      takerSide?: "bid" | "ask";
+      pageSize?: number;
+      sinceRcf3339?: string;
+      untilRfc3339?: string;
+      pageId?: string;
+    }>,
+  ): Promise<TradesResponse> {
+    if (query.sinceRcf3339 && !utils.isRfc3339(query.sinceRcf3339)) {
+      throw new NordError(`Invalid RFC3339 timestamp: ${query.sinceRcf3339}`);
+    }
+    if (query.untilRfc3339 && !utils.isRfc3339(query.untilRfc3339)) {
+      throw new NordError(`Invalid RFC3339 timestamp: ${query.untilRfc3339}`);
+    }
     return await this.GET("/trades", {
       params: {
         query: {
-          takerId: query.accountId,
-          since: query.since,
-          until: query.until,
+          takerId: query.takerId,
+          makerId: query.makerId,
+          marketId: query.marketId,
+          pageSize: query.pageSize,
+          takerSide: query.takerSide,
+          since: query.sinceRcf3339,
+          until: query.untilRfc3339,
           startInclusive: query.pageId,
         },
       },
@@ -624,7 +643,6 @@ export class Nord {
   /**
    * Get market statistics (alias for marketsStats for backward compatibility)
    *
-   * @deprecated Use marketsStats instead
    * @returns Market statistics response
    */
   public async getMarketStats({

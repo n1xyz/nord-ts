@@ -1,12 +1,12 @@
-import WebSocket from "ws";
 import { EventEmitter } from "events";
+import WebSocket from "ws";
 import {
+  WebSocketAccountUpdate,
+  WebSocketDeltaUpdate,
   WebSocketMessage,
   WebSocketMessageType,
   WebSocketSubscription,
   WebSocketTradeUpdate,
-  WebSocketDeltaUpdate,
-  WebSocketAccountUpdate,
 } from "../types";
 import { NordWebSocketClientEvents } from "./events";
 
@@ -394,19 +394,27 @@ export class NordWebSocketClient
    * @param message WebSocket message
    */
   private handleMessage(message: WebSocketMessage): void {
-    switch (message.e) {
-      case WebSocketMessageType.TradeUpdate:
-        this.emit("trades", message as WebSocketTradeUpdate);
-        break;
-      case WebSocketMessageType.DeltaUpdate:
-        this.emit("delta", message as WebSocketDeltaUpdate);
-        break;
-      case WebSocketMessageType.AccountUpdate:
-        this.emit("account", message as WebSocketAccountUpdate);
-        break;
-      default:
-        this.emit("error", new Error(`Unknown message type: ${message.e}`));
+    if (!message || typeof message !== "object") {
+      this.emit("error", new Error(`Unexpected message type: ${message}`));
+      return;
     }
+
+    const hasOwn = (k: string) =>
+      Object.prototype.hasOwnProperty.call(message, k);
+    if (hasOwn("trades")) {
+      this.emit("trades", message as WebSocketTradeUpdate);
+      return;
+    }
+    if (hasOwn("delta")) {
+      this.emit("delta", message as WebSocketDeltaUpdate);
+      return;
+    }
+    if (hasOwn("account")) {
+      this.emit("account", message as WebSocketAccountUpdate);
+      return;
+    }
+
+    this.emit("error", new Error(`Unexpected message type: ${message}`));
   }
 
   /**
