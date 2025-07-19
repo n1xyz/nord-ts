@@ -1,12 +1,18 @@
 {
   "name": "@n1xyz/nord-ts",
-  "version": "0.0.17",
+  "version": "0.0.20",
   "description": "Typescript for Nord",
   "keywords": [],
   "author": "",
   "license": "ISC",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+      "dist/",
+      "src/",
+      "package.json",
+      "README.md"
+  ],
   "scripts": {
     "gen:proto": "nix run ..#nord-ts-proto ../engine/nord.proto src/gen/",
     "gen:api": "nix run ..#nord-openapi | bunx openapi-typescript > src/gen/openapi.ts",
