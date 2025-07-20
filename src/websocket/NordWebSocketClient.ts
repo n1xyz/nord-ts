@@ -4,8 +4,6 @@ import {
   WebSocketAccountUpdate,
   WebSocketDeltaUpdate,
   WebSocketMessage,
-  WebSocketMessageType,
-  WebSocketSubscription,
   WebSocketTradeUpdate,
 } from "../types";
 import { NordWebSocketClientEvents } from "./events";
@@ -47,7 +45,6 @@ export class NordWebSocketClient
 {
   private ws: WebSocketInstance | null = null;
   private url: string;
-  private subscriptions: Set<string> = new Set();
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 5;
   private reconnectDelay: number = 1000;
@@ -174,11 +171,6 @@ export class NordWebSocketClient
           this.emit("connected");
           this.reconnectAttempts = 0;
           this.reconnectDelay = 1000;
-
-          // Resubscribe to previous subscriptions
-          if (this.subscriptions.size > 0) {
-            this.subscribe([...this.subscriptions]);
-          }
         };
 
         (this.ws as BrowserWebSocket).onmessage = (event: { data: any }) => {
@@ -202,13 +194,11 @@ export class NordWebSocketClient
             event && event.reason ? ` Reason: ${event.reason}` : "";
           const code = event && event.code ? ` Code: ${event.code}` : "";
           this.emit("disconnected");
-          console.log(`WebSocket closed.${code}${reason}`);
           this.reconnect();
         };
 
         (this.ws as BrowserWebSocket).onerror = (event: any) => {
           const errorMsg = `WebSocket error: ${event && event.type ? event.type : "unknown"}`;
-          console.error(errorMsg, event);
           this.emit("error", new Error(errorMsg));
         };
       } else {
@@ -221,11 +211,6 @@ export class NordWebSocketClient
           this.reconnectAttempts = 0;
           this.reconnectDelay = 1000;
           this.setupHeartbeat();
-
-          // Resubscribe to previous subscriptions
-          if (this.subscriptions.size > 0) {
-            this.subscribe([...this.subscriptions]);
-          }
         });
 
         nodeWs.on("message", (data: WebSocket.Data) => {
@@ -244,7 +229,6 @@ export class NordWebSocketClient
 
         nodeWs.on("close", (code: number, reason: string) => {
           this.emit("disconnected");
-          console.log(`WebSocket closed. Code: ${code} Reason: ${reason}`);
           if (this.pingInterval) {
             clearInterval(this.pingInterval);
           }
@@ -255,7 +239,6 @@ export class NordWebSocketClient
         });
 
         nodeWs.on("error", (error: Error) => {
-          console.error("WebSocket error:", error);
           this.emit("error", error);
         });
 
@@ -267,102 +250,7 @@ export class NordWebSocketClient
       }
     } catch (error) {
       const errorMsg = `Failed to initialize WebSocket: ${error instanceof Error ? error.message : String(error)}`;
-      console.error(errorMsg);
       this.emit("error", new Error(errorMsg));
-    }
-  }
-
-  /**
-   * Subscribe to one or more streams
-   * @param streams Array of streams to subscribe to (e.g. ["trades@BTCUSDC", "deltas@BTCUSDC"])
-   */
-  public subscribe(streams: string[]): void {
-    // Validate all streams first
-    try {
-      streams.forEach((stream) => this.validateStream(stream));
-    } catch (error) {
-      this.emit(
-        "error",
-        error instanceof Error ? error : new Error(String(error)),
-      );
-      return;
-    }
-
-    if (
-      !this.ws ||
-      (this.isBrowser
-        ? (this.ws as BrowserWebSocket).readyState !== WS_OPEN
-        : (this.ws as WebSocket).readyState !== WebSocket.OPEN)
-    ) {
-      streams.forEach((stream) => this.subscriptions.add(stream));
-      return;
-    }
-
-    const message: WebSocketSubscription = {
-      e: WebSocketMessageType.Subscribe,
-      streams,
-    };
-
-    try {
-      const messageStr = JSON.stringify(message);
-      if (this.isBrowser) {
-        (this.ws as BrowserWebSocket).send(messageStr);
-      } else {
-        (this.ws as WebSocket).send(messageStr);
-      }
-      streams.forEach((stream) => this.subscriptions.add(stream));
-    } catch (error) {
-      this.emit(
-        "error",
-        error instanceof Error ? error : new Error(String(error)),
-      );
-    }
-  }
-
-  /**
-   * Unsubscribe from one or more streams
-   * @param streams Array of streams to unsubscribe from
-   */
-  public unsubscribe(streams: string[]): void {
-    // Validate all streams first
-    try {
-      streams.forEach((stream) => this.validateStream(stream));
-    } catch (error) {
-      this.emit(
-        "error",
-        error instanceof Error ? error : new Error(String(error)),
-      );
-      return;
-    }
-
-    if (
-      !this.ws ||
-      (this.isBrowser
-        ? (this.ws as BrowserWebSocket).readyState !== WS_OPEN
-        : (this.ws as WebSocket).readyState !== WebSocket.OPEN)
-    ) {
-      streams.forEach((stream) => this.subscriptions.delete(stream));
-      return;
-    }
-
-    const message: WebSocketSubscription = {
-      e: WebSocketMessageType.Unsubscribe,
-      streams,
-    };
-
-    try {
-      const messageStr = JSON.stringify(message);
-      if (this.isBrowser) {
-        (this.ws as BrowserWebSocket).send(messageStr);
-      } else {
-        (this.ws as WebSocket).send(messageStr);
-      }
-      streams.forEach((stream) => this.subscriptions.delete(stream));
-    } catch (error) {
-      this.emit(
-        "error",
-        error instanceof Error ? error : new Error(String(error)),
-      );
     }
   }
 
@@ -386,7 +274,6 @@ export class NordWebSocketClient
       clearTimeout(this.pingTimeout);
       this.pingTimeout = null;
     }
-    this.subscriptions.clear();
   }
 
   /**

@@ -1,5 +1,4 @@
-import { Account, Info, SubscriptionPattern } from "../../types";
-import { checkedFetch } from "../../utils";
+import { SubscriptionPattern } from "../../types";
 import { NordWebSocketClient } from "../../websocket/index";
 import { NordError } from "../utils/NordError";
 
@@ -19,12 +18,10 @@ import { NordError } from "../utils/NordError";
 export function initWebSocketClient(
   webServerUrl: string,
   subscriptions?: SubscriptionPattern[] | "trades" | "delta" | "account",
-  initialSubscriptions?: SubscriptionPattern[],
 ): NordWebSocketClient {
   try {
     // Determine URL and subscriptions based on parameters
     let wsUrl = webServerUrl.replace(/^http/, "ws") + `/ws`;
-    let wsSubscriptions: SubscriptionPattern[] = [];
 
     // Validate subscriptions parameter
     if (typeof subscriptions === "string") {
@@ -35,12 +32,6 @@ export function initWebSocketClient(
         subscriptions === "account"
       ) {
         wsUrl += `/${subscriptions}`;
-        // If initialSubscriptions provided, use them
-        if (initialSubscriptions && initialSubscriptions.length > 0) {
-          // Validate initialSubscriptions
-          initialSubscriptions.forEach(validateSubscription);
-          wsSubscriptions = initialSubscriptions;
-        }
       } else {
         throw new NordError(
           `Invalid endpoint: ${subscriptions}. Must be "trades", "deltas", or "account".`,
@@ -68,12 +59,6 @@ export function initWebSocketClient(
     // Add connected handler for debugging
     ws.on("connected", () => {
       console.log("Nord WebSocket connected successfully");
-
-      // Subscribe to additional subscriptions if provided
-      // For new format, these are already part of the URL
-      if (wsSubscriptions.length > 0) {
-        ws.subscribe(wsSubscriptions);
-      }
     });
 
     // Connect the WebSocket

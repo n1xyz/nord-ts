@@ -251,19 +251,9 @@ export interface ActionNonceResponse {
  * WebSocket message types
  */
 export enum WebSocketMessageType {
-  Subscribe = "subscribe",
-  Unsubscribe = "unsubscribe",
   TradeUpdate = "trades",
   DeltaUpdate = "delta",
   AccountUpdate = "account",
-}
-
-/**
- * WebSocket subscription request
- */
-export interface WebSocketSubscription {
-  e: WebSocketMessageType;
-  streams: string[]; // Array of streams to subscribe/unsubscribe (e.g. ["trades@BTCUSDC", "deltas@BTCUSDC"])
 }
 
 /**
@@ -300,7 +290,6 @@ export interface WebSocketAccountUpdate {
 }
 
 export type WebSocketMessage =
-  | WebSocketSubscription
   | WebSocketTradeUpdate
   | WebSocketDeltaUpdate
   | WebSocketAccountUpdate;

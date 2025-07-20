@@ -1,12 +1,16 @@
+import { ProtonClient } from "@n1xyz/proton";
+import { Connection, PublicKey } from "@solana/web3.js";
 import { EventEmitter } from "events";
-import { PublicKey, Connection } from "@solana/web3.js";
 import createClient, { Client, FetchOptions } from "openapi-fetch";
+import * as proto from "../../gen/nord";
+import type { paths } from "../../gen/openapi.ts";
 import {
-  Info,
   Account,
   ActionResponse,
   AggregateMetrics,
+  Info,
   Market,
+  MarketStats,
   NordConfig,
   OrderbookQuery,
   OrderbookResponse,
@@ -15,18 +19,13 @@ import {
   Token,
   TradesResponse,
   User,
-  MarketStats,
 } from "../../types";
-import { ProtonClient } from "@n1xyz/proton";
-import * as proto from "../../gen/nord";
-// import { base64 } from "@scure/base";
+import * as utils from "../../utils";
 import { NordWebSocketClient } from "../../websocket/index";
 import * as core from "../api/core";
 import * as metrics from "../api/metrics";
-import * as utils from "../../utils";
 import { OrderbookSubscription, TradeSubscription } from "../models/Subscriber";
 import { NordError } from "../utils/NordError";
-import type { paths } from "../../gen/openapi.ts";
 
 /**
  * User subscription interface
@@ -427,7 +426,6 @@ export class Nord {
     wsClient.on("delta", handleDelta);
 
     subscription.close = () => {
-      wsClient.unsubscribe([`deltas@${symbol}`]);
       wsClient.removeListener("delta", handleDelta);
       subscription.removeAllListeners();
     };
@@ -471,7 +469,6 @@ export class Nord {
     wsClient.on("trades", handleTrade);
 
     subscription.close = () => {
-      wsClient.unsubscribe([`trades@${symbol}`]);
       wsClient.removeListener("trades", handleTrade);
       subscription.removeAllListeners();
     };
@@ -507,7 +504,6 @@ export class Nord {
     wsClient.on("account", handleAccountUpdate);
 
     subscription.close = () => {
-      wsClient.unsubscribe([`account@${accountId}`]);
       wsClient.removeListener("account", handleAccountUpdate);
       subscription.removeAllListeners();
     };
