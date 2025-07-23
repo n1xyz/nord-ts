@@ -27,9 +27,6 @@ type WebSocketInstance = WebSocket | BrowserWebSocket;
 
 const VALID_STREAM_TYPES = ["trades", "delta", "account"];
 
-// Constants for WebSocket readyState
-const WS_OPEN = 1;
-
 /**
  * WebSocket client for Nord exchange
  *
@@ -189,10 +186,7 @@ export class NordWebSocketClient
           }
         };
 
-        (this.ws as BrowserWebSocket).onclose = (event: any) => {
-          const reason =
-            event && event.reason ? ` Reason: ${event.reason}` : "";
-          const code = event && event.code ? ` Code: ${event.code}` : "";
+        (this.ws as BrowserWebSocket).onclose = (_event: any) => {
           this.emit("disconnected");
           this.reconnect();
         };
@@ -227,7 +221,7 @@ export class NordWebSocketClient
           }
         });
 
-        nodeWs.on("close", (code: number, reason: string) => {
+        nodeWs.on("close", (_code: number, _reason: string) => {
           this.emit("disconnected");
           if (this.pingInterval) {
             clearInterval(this.pingInterval);

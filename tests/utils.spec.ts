@@ -1,12 +1,9 @@
 import { describe, it, expect } from "@jest/globals";
-import {
-  toScaledU64,
-  toScaledU128,
-  encodeLengthDelimited,
-  decodeLengthDelimited,
-} from "../src/utils";
+import { toScaledU64, toScaledU128, decodeLengthDelimited } from "../src/utils";
 import Decimal from "decimal.js";
-import * as proto from "../src/gen/nord";
+import * as proto from "../src/gen/nord_pb";
+import { create } from "@bufbuild/protobuf";
+import { sizeDelimitedEncode } from "@bufbuild/protobuf/wire";
 
 describe("toScaledU64", () => {
   // Used as scaling medium
@@ -91,12 +88,12 @@ describe("toScaledU128", () => {
 });
 
 describe("proto.Action encode-decode loop", () => {
-  const action: proto.Action = {
+  const action = create(proto.ActionSchema, {
     currentTimestamp: 0n,
     nonce: 0,
     kind: {
-      $case: "placeOrder",
-      value: {
+      case: "placeOrder",
+      value: create(proto.Action_PlaceOrderSchema, {
         sessionId: 42n,
         marketId: 9,
         fillMode: proto.FillMode.LIMIT,
@@ -104,17 +101,18 @@ describe("proto.Action encode-decode loop", () => {
         isReduceOnly: false,
         price: 12n,
         size: 39n,
-        quoteSize: { size: 54n, price: 55n },
-        senderAccountId: undefined,
-        delegatorAccountId: undefined,
+        quoteSize: create(proto.QuoteSizeSchema, { size: 54n, price: 55n }),
         clientOrderId: 350n,
-      },
+      }),
     },
-  };
+  });
 
   it("action encode-decode roundabout should succeed", () => {
-    const encoded = encodeLengthDelimited(action, proto.Action);
-    const decoded: proto.Action = decodeLengthDelimited(encoded, proto.Action);
+    const encoded = sizeDelimitedEncode(proto.ActionSchema, action);
+    const decoded: proto.Action = decodeLengthDelimited(
+      encoded,
+      proto.ActionSchema,
+    );
 
     expect(decoded).toEqual(action);
   });

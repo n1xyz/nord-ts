@@ -2,7 +2,7 @@ import { ProtonClient } from "@n1xyz/proton";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { EventEmitter } from "events";
 import createClient, { Client, FetchOptions } from "openapi-fetch";
-import * as proto from "../../gen/nord";
+import * as proto from "../../gen/nord_pb";
 import type { paths } from "../../gen/openapi.ts";
 import {
   Account,
@@ -305,7 +305,7 @@ export class Nord {
       actionId: x.actionId,
       action: utils.decodeLengthDelimited(
         Buffer.from(x.payload, "base64"),
-        proto.Action,
+        proto.ActionSchema,
       ),
       physicalExecTime: new Date(x.physicalTime * 1000),
     }));

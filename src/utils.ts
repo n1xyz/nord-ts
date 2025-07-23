@@ -4,8 +4,9 @@ import { bls12_381 as bls } from "@noble/curves/bls12-381";
 import { secp256k1 as secp } from "@noble/curves/secp256k1";
 import { sha256 } from "@noble/hashes/sha256";
 import { KeyType, type Market, type Token } from "./types";
-import * as proto from "./gen/nord";
-import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
+import { sizeDelimitedPeek } from "@bufbuild/protobuf/wire";
+import { fromBinary, type Message } from "@bufbuild/protobuf";
+import type { GenMessage } from "@bufbuild/protobuf/codegenv2";
 import { ethers } from "ethers";
 import fetch from "node-fetch";
 import { RequestInfo, RequestInit, Response } from "node-fetch";
@@ -177,62 +178,41 @@ export const toScaledU128 = makeToScaledBigUint({
 });
 
 /**
- * Encodes any protobuf message into a length-delimited format,
- * i.e. prefixed with its length encoded as varint
- * @param   message message object
- * @param   coder   associated coder object which implements `MessageFns` interface
- * @returns         Encoded message as Uint8Array, prefixed with its length
- */
-export function encodeLengthDelimited<T, M extends proto.MessageFns<T>>(
-  message: T,
-  coder: M,
-): Uint8Array {
-  const encoded = coder.encode(message).finish();
-  if (encoded.byteLength > MAX_PAYLOAD_SIZE) {
-    throw new Error(
-      `Encoded message size (${encoded.byteLength} bytes) is greater than max payload size (${MAX_PAYLOAD_SIZE} bytes).`,
-    );
-  }
-  const encodedLength = new BinaryWriter().uint32(encoded.byteLength).finish();
-  return new Uint8Array([...encodedLength, ...encoded]);
-}
-
-/**
  * Decodes any protobuf message from a length-delimited format,
  * i.e. prefixed with its length encoded as varint
  *
- * NB: Please note that due to limitations of Typescript type inference
- * it requires to specify variable type explicitly:
- *
- * ```
- * const foo: proto.Bar = decodeLengthDelimited(bytes, proto.Bar);
- * ```
- *
- * @param   bytes Byte array with encoded message
- * @param   coder associated coder object which implements `MessageFns` interface
- * @returns       Decoded Action as Uint8Array.
+ * @param   bytes  Byte array with encoded message
+ * @param   schema Message schema for decoding
+ * @returns        Decoded message
  */
-export function decodeLengthDelimited<T, M extends proto.MessageFns<T>>(
+export function decodeLengthDelimited<T extends Message>(
   bytes: Uint8Array,
-  coder: M,
+  schema: GenMessage<T>,
 ): T {
-  const lengthReader = new BinaryReader(bytes);
-  const msgLength = lengthReader.uint32();
-  const startsAt = lengthReader.pos;
+  // use sizeDelimitedPeek to extract the message length and offset
+  const peekResult = sizeDelimitedPeek(bytes);
 
-  if (msgLength > MAX_PAYLOAD_SIZE) {
+  if (peekResult.size === null || peekResult.offset === null) {
+    throw new Error("Failed to parse size-delimited message");
+  }
+
+  if (peekResult.size > MAX_PAYLOAD_SIZE) {
     throw new Error(
-      `Encoded message size (${msgLength} bytes) is greater than max payload size (${MAX_PAYLOAD_SIZE} bytes).`,
+      `Encoded message size (${peekResult.size} bytes) is greater than max payload size (${MAX_PAYLOAD_SIZE} bytes).`,
     );
   }
 
-  if (startsAt + msgLength > bytes.byteLength) {
+  if (peekResult.offset + peekResult.size > bytes.length) {
     throw new Error(
-      `Encoded message size (${msgLength} bytes) is greater than remaining buffer size (${bytes.byteLength - startsAt} bytes).`,
+      `Encoded message size (${peekResult.size} bytes) is greater than remaining buffer size (${bytes.length - peekResult.offset} bytes).`,
     );
   }
 
-  return coder.decode(bytes.slice(startsAt, startsAt + msgLength));
+  // decode the message using the offset and size from peek
+  return fromBinary(
+    schema,
+    bytes.slice(peekResult.offset, peekResult.offset + peekResult.size),
+  );
 }
 
 export function checkPubKeyLength(keyType: KeyType, len: number): void {

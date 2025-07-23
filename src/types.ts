@@ -1,4 +1,4 @@
-import * as proto from "./gen/nord";
+import * as proto from "./gen/nord_pb";
 import type { components } from "./gen/openapi.ts";
 
 /**
