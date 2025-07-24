@@ -657,7 +657,7 @@ export class NordUser {
    * @throws {NordError} If the operation fails
    */
   async refreshSession(): Promise<void> {
-    this.sessionId = await createSession(
+    const result = await createSession(
       this.nord.webServerUrl,
       this.walletSignFn,
       await this.nord.getTimestamp(),
@@ -667,6 +667,7 @@ export class NordUser {
         sessionPubkey: this.sessionPubKey,
       },
     );
+    this.sessionId = result.sessionId;
   }
   /**
    * Revoke a session
@@ -746,10 +747,14 @@ export class NordUser {
    * Place an order on the exchange
    *
    * @param params - Order parameters
-   * @returns Order ID if successful
+   * @returns Object containing actionId, orderId (if posted), fills, and clientOrderId
    * @throws {NordError} If the operation fails
    */
-  async placeOrder(params: PlaceOrderParams): Promise<bigint | undefined> {
+  async placeOrder(params: PlaceOrderParams): Promise<{
+    actionId: bigint;
+    orderId?: bigint;
+    fills: proto.Receipt_Trade[];
+  }> {
     try {
       this.checkSessionValidity();
       const market = findMarket(this.nord.markets, params.marketId);
@@ -757,7 +762,7 @@ export class NordUser {
         throw new NordError(`Market with ID ${params.marketId} not found`);
       }
 
-      return placeOrder(
+      const result = await placeOrder(
         this.nord.webServerUrl,
         this.sessionSignFn,
         await this.nord.getTimestamp(),
@@ -776,6 +781,7 @@ export class NordUser {
           quoteSize: params.quoteSize,
         },
       );
+      return result;
     } catch (error) {
       throw new NordError("Failed to place order", { cause: error });
     }
@@ -786,18 +792,22 @@ export class NordUser {
    *
    * @param orderId - Order ID to cancel
    * @param providedAccountId - Account ID that placed the order
-   * @returns Action ID if successful
+   * @returns Object containing actionId, cancelled orderId, and accountId
    * @throws {NordError} If the operation fails
    */
   async cancelOrder(
     orderId: BigIntValue,
     providedAccountId?: number,
-  ): Promise<bigint> {
+  ): Promise<{
+    actionId: bigint;
+    orderId: bigint;
+    accountId: number;
+  }> {
     const accountId =
       providedAccountId != null ? providedAccountId : this.accountIds?.[0];
     try {
       this.checkSessionValidity();
-      return cancelOrder(
+      const result = await cancelOrder(
         this.nord.webServerUrl,
         this.sessionSignFn,
         await this.nord.getTimestamp(),
@@ -808,6 +818,7 @@ export class NordUser {
           orderId,
         },
       );
+      return result;
     } catch (error) {
       throw new NordError(`Failed to cancel order ${orderId}`, {
         cause: error,
@@ -860,7 +871,10 @@ export class NordUser {
   async atomic(
     userActions: UserAtomicSubaction[],
     providedAccountId?: number,
-  ): Promise<proto.Receipt_AtomicResult> {
+  ): Promise<{
+    actionId: bigint;
+    results: proto.Receipt_AtomicSubactionResultKind[];
+  }> {
     try {
       this.checkSessionValidity();
 

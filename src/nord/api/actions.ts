@@ -93,7 +93,7 @@ export async function createSession(
     // If not specified, set to current moment plus default session TTL
     expiryTimestamp?: bigint;
   },
-): Promise<bigint> {
+): Promise<{ actionId: bigint; sessionId: bigint }> {
   checkPubKeyLength(KeyType.Ed25519, params.userPubkey.length);
   checkPubKeyLength(KeyType.Ed25519, params.sessionPubkey.length);
 
@@ -126,7 +126,10 @@ export async function createSession(
   );
 
   if (resp.kind?.case === "createSessionResult") {
-    return resp.kind.value.sessionId;
+    return {
+      actionId: resp.actionId,
+      sessionId: resp.kind.value.sessionId,
+    };
   } else {
     throw new Error(`Unexpected receipt kind ${resp.kind?.case}`);
   }
@@ -140,7 +143,7 @@ export async function revokeSession(
   params: {
     sessionId: BigIntValue;
   },
-): Promise<void> {
+): Promise<{ actionId: bigint }> {
   const action = createAction(currentTimestamp, nonce, {
     case: "revokeSession",
     value: create(proto.Action_RevokeSessionSchema, {
@@ -148,12 +151,14 @@ export async function revokeSession(
     }),
   });
 
-  await sendAction(
+  const resp = await sendAction(
     serverUrl,
     (m) => walletSign(walletSignFn, m),
     action,
     "revoke session",
   );
+
+  return { actionId: resp.actionId };
 }
 
 export async function withdraw(
@@ -218,7 +223,11 @@ export async function placeOrder(
     liquidateeId?: number;
     clientOrderId?: BigIntValue;
   },
-): Promise<bigint | undefined> {
+): Promise<{
+  actionId: bigint;
+  orderId?: bigint;
+  fills: proto.Receipt_Trade[];
+}> {
   const price = toScaledU64(params.price ?? 0, params.priceDecimals);
   const size = toScaledU64(params.size ?? 0, params.sizeDecimals);
   const quoteSize = toScaledU64(params.quoteSize ?? 0, params.sizeDecimals);
@@ -255,7 +264,11 @@ export async function placeOrder(
   );
 
   if (resp.kind?.case === "placeOrderResult") {
-    return resp.kind.value.posted?.orderId;
+    return {
+      actionId: resp.actionId,
+      orderId: resp.kind.value.posted?.orderId,
+      fills: resp.kind.value.fills,
+    };
   } else {
     throw new Error(`Unexpected receipt kind ${resp.kind?.case}`);
   }
@@ -272,7 +285,11 @@ export async function cancelOrder(
     orderId: BigIntValue;
     liquidateeId?: number;
   },
-): Promise<bigint> {
+): Promise<{
+  actionId: bigint;
+  orderId: bigint;
+  accountId: number;
+}> {
   const action = createAction(currentTimestamp, nonce, {
     case: "cancelOrderById",
     value: create(proto.Action_CancelOrderByIdSchema, {
@@ -291,7 +308,11 @@ export async function cancelOrder(
   );
 
   if (resp.kind?.case === "cancelOrderResult") {
-    return resp.kind.value.orderId;
+    return {
+      actionId: resp.actionId,
+      orderId: resp.kind.value.orderId,
+      accountId: resp.kind.value.accountId,
+    };
   } else {
     throw new Error(`Unexpected receipt kind ${resp.kind?.case}`);
   }
@@ -310,7 +331,14 @@ export async function transfer(
     tokenDecimals: number;
     amount: Decimal.Value;
   },
-): Promise<number | undefined> {
+): Promise<{
+  actionId: bigint;
+  fromAccountId: number;
+  toAccountId?: number;
+  tokenId: number;
+  amount: bigint;
+  accountCreated: boolean;
+}> {
   const action = createAction(currentTimestamp, nonce, {
     case: "transfer",
     value: create(proto.Action_TransferSchema, {
@@ -330,11 +358,14 @@ export async function transfer(
   );
 
   if (resp.kind?.case === "transferred") {
-    if (resp.kind.value.accountCreated) {
-      return resp.kind.value.toUserAccount;
-    } else {
-      return undefined;
-    }
+    return {
+      actionId: resp.actionId,
+      fromAccountId: resp.kind.value.fromAccountId,
+      toAccountId: resp.kind.value.toUserAccount,
+      tokenId: resp.kind.value.tokenId,
+      amount: resp.kind.value.amount,
+      accountCreated: resp.kind.value.accountCreated,
+    };
   } else {
     throw new Error(`Unexpected receipt kind ${resp.kind?.case}`);
   }
@@ -373,7 +404,10 @@ export async function atomic(
     accountId?: number;
     actions: AtomicSubaction[];
   },
-): Promise<proto.Receipt_AtomicResult> {
+): Promise<{
+  actionId: bigint;
+  results: proto.Receipt_AtomicSubactionResultKind[];
+}> {
   assert(
     params.actions.length > 0 && params.actions.length <= 4,
     "Atomic action must contain between 1 and 4 sub-actions",
@@ -437,7 +471,10 @@ export async function atomic(
     "execute atomic action",
   );
   if (resp.kind?.case === "atomic") {
-    return resp.kind.value;
+    return {
+      actionId: resp.actionId,
+      results: resp.kind.value.results,
+    };
   }
   throw new Error(`Unexpected receipt kind ${resp.kind?.case}`);
 }
