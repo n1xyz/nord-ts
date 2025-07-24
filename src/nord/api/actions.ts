@@ -29,24 +29,21 @@ async function walletSign(
   return new Uint8Array([...message, ...signature]);
 }
 
-function makeSendHttp(
-  serverUrl: string,
-): (encoded: Uint8Array) => Promise<Uint8Array> {
-  return async (body) => {
-    // TODO: this should be changed to use openapi
-    const response = await checkedFetch(`${serverUrl}/action`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body,
-    });
-    return new Uint8Array(await response.arrayBuffer());
-  };
+// Helper to create an action with common fields
+function createAction(
+  currentTimestamp: bigint,
+  nonce: number,
+  kind: proto.Action["kind"],
+): proto.Action {
+  return create(proto.ActionSchema, {
+    currentTimestamp,
+    nonce,
+    kind,
+  });
 }
 
 async function sendAction(
-  sendFn: (encoded: Uint8Array) => Promise<Uint8Array>,
+  serverUrl: string,
   makeSignedMessage: (message: Uint8Array) => Promise<Uint8Array>,
   action: proto.Action,
   actionErrorDesc: string,
@@ -60,7 +57,17 @@ async function sendAction(
     );
   }
   const body = await makeSignedMessage(encoded);
-  const rawResp = await sendFn(body);
+
+  // TODO: this should be changed to use openapi
+  const response = await checkedFetch(`${serverUrl}/action`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body,
+  });
+  const rawResp = new Uint8Array(await response.arrayBuffer());
+
   const resp: proto.Receipt = decodeLengthDelimited(
     rawResp,
     proto.ReceiptSchema,
@@ -75,8 +82,8 @@ async function sendAction(
   return resp;
 }
 
-async function createSessionImpl(
-  sendFn: (encoded: Uint8Array) => Promise<Uint8Array>,
+export async function createSession(
+  serverUrl: string,
   walletSignFn: (message: string | Uint8Array) => Promise<Uint8Array>,
   currentTimestamp: bigint,
   nonce: number,
@@ -102,21 +109,17 @@ async function createSessionImpl(
     expiry = currentTimestamp + SESSION_TTL;
   }
 
-  const action = create(proto.ActionSchema, {
-    currentTimestamp,
-    nonce,
-    kind: {
-      case: "createSession",
-      value: create(proto.Action_CreateSessionSchema, {
-        userPubkey: params.userPubkey,
-        blstPubkey: params.sessionPubkey,
-        expiryTimestamp: expiry,
-      }),
-    },
+  const action = createAction(currentTimestamp, nonce, {
+    case: "createSession",
+    value: create(proto.Action_CreateSessionSchema, {
+      userPubkey: params.userPubkey,
+      blstPubkey: params.sessionPubkey,
+      expiryTimestamp: expiry,
+    }),
   });
 
   const resp = await sendAction(
-    sendFn,
+    serverUrl,
     (m) => walletSign(walletSignFn, m),
     action,
     "create a new session",
@@ -129,55 +132,6 @@ async function createSessionImpl(
   }
 }
 
-export async function createSession(
-  serverUrl: string,
-  walletSignFn: (message: string | Uint8Array) => Promise<Uint8Array>,
-  currentTimestamp: bigint,
-  nonce: number,
-  params: {
-    userPubkey: Uint8Array;
-    sessionPubkey: Uint8Array;
-    // If not specified, set to current moment plus default session TTL
-    expiryTimestamp?: bigint;
-  },
-): Promise<bigint> {
-  return createSessionImpl(
-    makeSendHttp(serverUrl),
-    walletSignFn,
-    currentTimestamp,
-    nonce,
-    params,
-  );
-}
-
-async function revokeSessionImpl(
-  sendFn: (encoded: Uint8Array) => Promise<Uint8Array>,
-  walletSignFn: (message: string | Uint8Array) => Promise<Uint8Array>,
-  currentTimestamp: bigint,
-  nonce: number,
-  params: {
-    sessionId: BigIntValue;
-  },
-): Promise<void> {
-  const action = create(proto.ActionSchema, {
-    currentTimestamp,
-    nonce,
-    kind: {
-      case: "revokeSession",
-      value: create(proto.Action_RevokeSessionSchema, {
-        sessionId: BigInt(params.sessionId),
-      }),
-    },
-  });
-
-  await sendAction(
-    sendFn,
-    (m) => walletSign(walletSignFn, m),
-    action,
-    "create a new session",
-  );
-}
-
 export async function revokeSession(
   serverUrl: string,
   walletSignFn: (message: string | Uint8Array) => Promise<Uint8Array>,
@@ -187,17 +141,23 @@ export async function revokeSession(
     sessionId: BigIntValue;
   },
 ): Promise<void> {
-  return revokeSessionImpl(
-    makeSendHttp(serverUrl),
-    walletSignFn,
-    currentTimestamp,
-    nonce,
-    params,
+  const action = createAction(currentTimestamp, nonce, {
+    case: "revokeSession",
+    value: create(proto.Action_RevokeSessionSchema, {
+      sessionId: BigInt(params.sessionId),
+    }),
+  });
+
+  await sendAction(
+    serverUrl,
+    (m) => walletSign(walletSignFn, m),
+    action,
+    "revoke session",
   );
 }
 
-async function withdrawImpl(
-  sendFn: (encoded: Uint8Array) => Promise<Uint8Array>,
+export async function withdraw(
+  serverUrl: string,
   signFn: (message: Uint8Array) => Promise<Uint8Array>,
   currentTimestamp: bigint,
   nonce: number,
@@ -214,21 +174,17 @@ async function withdrawImpl(
     throw new Error("Withdraw amount must be positive");
   }
 
-  const action = create(proto.ActionSchema, {
-    currentTimestamp,
-    nonce,
-    kind: {
-      case: "withdraw",
-      value: create(proto.Action_WithdrawSchema, {
-        sessionId: BigInt(params.sessionId),
-        tokenId: params.tokenId,
-        amount,
-      }),
-    },
+  const action = createAction(currentTimestamp, nonce, {
+    case: "withdraw",
+    value: create(proto.Action_WithdrawSchema, {
+      sessionId: BigInt(params.sessionId),
+      tokenId: params.tokenId,
+      amount,
+    }),
   });
 
   const resp = await sendAction(
-    sendFn,
+    serverUrl,
     (m) => sessionSign(signFn, m),
     action,
     "withdraw",
@@ -236,100 +192,6 @@ async function withdrawImpl(
 
   if (resp.kind?.case === "withdrawResult") {
     return { actionId: resp.actionId, ...resp.kind.value };
-  } else {
-    throw new Error(`Unexpected receipt kind ${resp.kind?.case}`);
-  }
-}
-
-export async function withdraw(
-  serverUrl: string,
-  signFn: (message: Uint8Array) => Promise<Uint8Array>,
-  currentTimestamp: bigint,
-  nonce: number,
-  params: {
-    sizeDecimals: number;
-    sessionId: BigIntValue;
-    tokenId: number;
-    amount: number;
-  },
-): Promise<{ actionId: bigint } & proto.Receipt_WithdrawResult> {
-  return withdrawImpl(
-    makeSendHttp(serverUrl),
-    signFn,
-    currentTimestamp,
-    nonce,
-    params,
-  );
-}
-
-async function placeOrderImpl(
-  sendFn: (encoded: Uint8Array) => Promise<Uint8Array>,
-  signFn: (message: Uint8Array) => Promise<Uint8Array>,
-  currentTimestamp: bigint,
-  nonce: number,
-  params: {
-    sessionId: BigIntValue;
-    senderId?: number;
-    liquidateeId?: number;
-    sizeDecimals: number;
-    priceDecimals: number;
-    marketId: number;
-    side: Side;
-    fillMode: FillMode;
-    isReduceOnly: boolean;
-    // NOTE: if `size` equals 1.0, it will sell whole unit, for example 1.0 BTC
-    size?: Decimal.Value;
-    price?: Decimal.Value;
-    quoteSizeSize?: Decimal.Value;
-    quoteSizePrice?: Decimal.Value;
-    clientOrderId?: BigIntValue;
-  },
-): Promise<bigint | undefined> {
-  const price = toScaledU64(params.price ?? 0, params.priceDecimals);
-  const size = toScaledU64(params.size ?? 0, params.sizeDecimals);
-  const quoteSize = toScaledU64(params.quoteSizeSize ?? 0, params.sizeDecimals);
-  const quotePrice = toScaledU64(
-    params.quoteSizePrice ?? 0,
-    params.priceDecimals,
-  );
-
-  // Compose action object
-  const action = create(proto.ActionSchema, {
-    currentTimestamp,
-    nonce,
-    kind: {
-      case: "placeOrder",
-      value: create(proto.Action_PlaceOrderSchema, {
-        sessionId: BigInt(params.sessionId),
-        senderAccountId: params.senderId,
-        marketId: params.marketId,
-        side: params.side === Side.Bid ? proto.Side.BID : proto.Side.ASK,
-        fillMode: fillModeToProtoFillMode(params.fillMode),
-        isReduceOnly: params.isReduceOnly,
-        price,
-        size,
-        quoteSize: create(proto.QuoteSizeSchema, {
-          size: quoteSize,
-          price: quotePrice,
-        }),
-        clientOrderId:
-          params.clientOrderId === undefined
-            ? undefined
-            : BigInt(params.clientOrderId),
-        delegatorAccountId: params.liquidateeId,
-      }),
-    },
-  });
-
-  const resp = await sendAction(
-    sendFn,
-    (m) => sessionSign(signFn, m),
-    action,
-    "place the order",
-  );
-
-  if (resp.kind?.case === "placeOrderResult") {
-    return resp.kind.value.posted?.orderId;
   } else {
     throw new Error(`Unexpected receipt kind ${resp.kind?.case}`);
   }
@@ -349,6 +211,7 @@ export async function placeOrder(
     side: Side;
     fillMode: FillMode;
     isReduceOnly: boolean;
+    // NOTE: if `size` equals 1.0, it will sell whole unit, for example 1.0 BTC
     size?: Decimal.Value;
     price?: Decimal.Value;
     quoteSize?: Decimal.Value;
@@ -356,50 +219,43 @@ export async function placeOrder(
     clientOrderId?: BigIntValue;
   },
 ): Promise<bigint | undefined> {
-  return placeOrderImpl(
-    makeSendHttp(serverUrl),
-    signFn,
-    currentTimestamp,
-    nonce,
-    params,
-  );
-}
+  const price = toScaledU64(params.price ?? 0, params.priceDecimals);
+  const size = toScaledU64(params.size ?? 0, params.sizeDecimals);
+  const quoteSize = toScaledU64(params.quoteSize ?? 0, params.sizeDecimals);
+  const quotePrice = 0n; // Always 0 for now based on existing code
 
-async function cancelOrderImpl(
-  sendFn: (encoded: Uint8Array) => Promise<Uint8Array>,
-  signFn: (message: Uint8Array) => Promise<Uint8Array>,
-  currentTimestamp: bigint,
-  nonce: number,
-  params: {
-    sessionId: BigIntValue;
-    senderId?: number;
-    orderId: BigIntValue;
-    liquidateeId?: number;
-  },
-): Promise<bigint> {
-  const action = create(proto.ActionSchema, {
-    currentTimestamp,
-    nonce: nonce,
-    kind: {
-      case: "cancelOrderById",
-      value: create(proto.Action_CancelOrderByIdSchema, {
-        orderId: BigInt(params.orderId),
-        sessionId: BigInt(params.sessionId),
-        senderAccountId: params.senderId,
-        delegatorAccountId: params.liquidateeId,
+  const action = createAction(currentTimestamp, nonce, {
+    case: "placeOrder",
+    value: create(proto.Action_PlaceOrderSchema, {
+      sessionId: BigInt(params.sessionId),
+      senderAccountId: params.senderId,
+      marketId: params.marketId,
+      side: params.side === Side.Bid ? proto.Side.BID : proto.Side.ASK,
+      fillMode: fillModeToProtoFillMode(params.fillMode),
+      isReduceOnly: params.isReduceOnly,
+      price,
+      size,
+      quoteSize: create(proto.QuoteSizeSchema, {
+        size: quoteSize,
+        price: quotePrice,
       }),
-    },
+      clientOrderId:
+        params.clientOrderId === undefined
+          ? undefined
+          : BigInt(params.clientOrderId),
+      delegatorAccountId: params.liquidateeId,
+    }),
   });
 
   const resp = await sendAction(
-    sendFn,
+    serverUrl,
     (m) => sessionSign(signFn, m),
     action,
-    "cancel the order",
+    "place order",
   );
 
-  if (resp.kind?.case === "cancelOrderResult") {
-    return resp.kind.value.orderId;
+  if (resp.kind?.case === "placeOrderResult") {
+    return resp.kind.value.posted?.orderId;
   } else {
     throw new Error(`Unexpected receipt kind ${resp.kind?.case}`);
   }
@@ -417,57 +273,25 @@ export async function cancelOrder(
     liquidateeId?: number;
   },
 ): Promise<bigint> {
-  return cancelOrderImpl(
-    makeSendHttp(serverUrl),
-    signFn,
-    currentTimestamp,
-    nonce,
-    params,
-  );
-}
-
-async function transferImpl(
-  sendFn: (encoded: Uint8Array) => Promise<Uint8Array>,
-  signFn: (message: Uint8Array) => Promise<Uint8Array>,
-  currentTimestamp: bigint,
-  nonce: number,
-  params: {
-    sessionId: BigIntValue;
-    fromAccountId: number;
-    toAccountId?: number;
-    tokenId: number;
-    tokenDecimals: number;
-    amount: Decimal.Value;
-  },
-): Promise<number | undefined> {
-  const action = create(proto.ActionSchema, {
-    currentTimestamp,
-    nonce: nonce,
-    kind: {
-      case: "transfer",
-      value: create(proto.Action_TransferSchema, {
-        sessionId: BigInt(params.sessionId),
-        fromAccountId: params.fromAccountId,
-        toAccountId: params.toAccountId,
-        tokenId: params.tokenId,
-        amount: toScaledU64(params.amount ?? 0, params.tokenDecimals),
-      }),
-    },
+  const action = createAction(currentTimestamp, nonce, {
+    case: "cancelOrderById",
+    value: create(proto.Action_CancelOrderByIdSchema, {
+      orderId: BigInt(params.orderId),
+      sessionId: BigInt(params.sessionId),
+      senderAccountId: params.senderId,
+      delegatorAccountId: params.liquidateeId,
+    }),
   });
 
   const resp = await sendAction(
-    sendFn,
+    serverUrl,
     (m) => sessionSign(signFn, m),
     action,
-    "transfer asset to other account",
+    "cancel order",
   );
 
-  if (resp.kind?.case === "transferred") {
-    if (resp.kind.value.accountCreated) {
-      return resp.kind.value.toUserAccount;
-    } else {
-      return undefined;
-    }
+  if (resp.kind?.case === "cancelOrderResult") {
+    return resp.kind.value.orderId;
   } else {
     throw new Error(`Unexpected receipt kind ${resp.kind?.case}`);
   }
@@ -487,13 +311,33 @@ export async function transfer(
     amount: Decimal.Value;
   },
 ): Promise<number | undefined> {
-  return transferImpl(
-    makeSendHttp(serverUrl),
-    signFn,
-    currentTimestamp,
-    nonce,
-    params,
+  const action = createAction(currentTimestamp, nonce, {
+    case: "transfer",
+    value: create(proto.Action_TransferSchema, {
+      sessionId: BigInt(params.sessionId),
+      fromAccountId: params.fromAccountId,
+      toAccountId: params.toAccountId,
+      tokenId: params.tokenId,
+      amount: toScaledU64(params.amount ?? 0, params.tokenDecimals),
+    }),
+  });
+
+  const resp = await sendAction(
+    serverUrl,
+    (m) => sessionSign(signFn, m),
+    action,
+    "transfer",
   );
+
+  if (resp.kind?.case === "transferred") {
+    if (resp.kind.value.accountCreated) {
+      return resp.kind.value.toUserAccount;
+    } else {
+      return undefined;
+    }
+  } else {
+    throw new Error(`Unexpected receipt kind ${resp.kind?.case}`);
+  }
 }
 
 export type AtomicSubaction =
@@ -519,8 +363,8 @@ export type AtomicSubaction =
       orderId: BigIntValue;
     };
 
-async function atomicImpl(
-  sendFn: (encoded: Uint8Array) => Promise<Uint8Array>,
+export async function atomic(
+  serverUrl: string,
   signFn: (message: Uint8Array) => Promise<Uint8Array>,
   currentTimestamp: bigint,
   nonce: number,
@@ -577,21 +421,17 @@ async function atomicImpl(
     });
   });
 
-  const action = create(proto.ActionSchema, {
-    currentTimestamp,
-    nonce,
-    kind: {
-      case: "atomic",
-      value: create(proto.AtomicSchema, {
-        sessionId: BigInt(params.sessionId),
-        accountId: params.accountId, // optional
-        actions: subactions,
-      }),
-    },
+  const action = createAction(currentTimestamp, nonce, {
+    case: "atomic",
+    value: create(proto.AtomicSchema, {
+      sessionId: BigInt(params.sessionId),
+      accountId: params.accountId, // optional
+      actions: subactions,
+    }),
   });
 
   const resp = await sendAction(
-    sendFn,
+    serverUrl,
     (m) => sessionSign(signFn, m),
     action,
     "execute atomic action",
@@ -601,36 +441,3 @@ async function atomicImpl(
   }
   throw new Error(`Unexpected receipt kind ${resp.kind?.case}`);
 }
-
-export async function atomic(
-  serverUrl: string,
-  signFn: (message: Uint8Array) => Promise<Uint8Array>,
-  currentTimestamp: bigint,
-  nonce: number,
-  params: {
-    sessionId: BigIntValue;
-    accountId?: number;
-    actions: AtomicSubaction[];
-  },
-): Promise<proto.Receipt_AtomicResult> {
-  return atomicImpl(
-    makeSendHttp(serverUrl),
-    signFn,
-    currentTimestamp,
-    nonce,
-    params,
-  );
-}
-
-/**
- * For testing purposes
- */
-export const _private = {
-  createSessionImpl,
-  revokeSessionImpl,
-  withdrawImpl,
-  placeOrderImpl,
-  cancelOrderImpl,
-  transferImpl,
-  atomicImpl,
-};
