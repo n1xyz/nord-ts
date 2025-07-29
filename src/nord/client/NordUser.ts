@@ -4,7 +4,12 @@ import {
   TOKEN_PROGRAM_ID,
   TOKEN_2022_PROGRAM_ID,
 } from "@solana/spl-token";
-import { Connection, PublicKey, Transaction } from "@solana/web3.js";
+import {
+  Connection,
+  PublicKey,
+  Transaction,
+  SendOptions,
+} from "@solana/web3.js";
 import Decimal from "decimal.js";
 import * as ed from "@noble/ed25519";
 import { sha512 } from "@noble/hashes/sha512";
@@ -471,6 +476,7 @@ export class NordUser {
    * @param amount - Amount to deposit
    * @param tokenId - Token ID
    * @param recipient - Recipient address; defaults to the user's address
+   * @param sendOptions - Send options for .sendTransaction
    * @returns Transaction signature
    * @throws {NordError} If required parameters are missing or operation fails
    */
@@ -478,10 +484,12 @@ export class NordUser {
     amount,
     tokenId,
     recipient,
+    sendOptions,
   }: Readonly<{
     amount: number;
     tokenId: number;
     recipient?: PublicKey;
+    sendOptions?: SendOptions;
   }>): Promise<string> {
     try {
       // Find the token info
@@ -502,8 +510,7 @@ export class NordUser {
         sourceTokenAccount: fromAccount,
       });
 
-      const { blockhash } =
-        await this.connection.getLatestBlockhash("confirmed");
+      const { blockhash } = await this.connection.getLatestBlockhash();
       const tx = new Transaction();
 
       tx.add(ix);
@@ -515,6 +522,7 @@ export class NordUser {
 
       const signature = await this.connection.sendRawTransaction(
         signedTx.serialize(),
+        sendOptions,
       );
 
       return signature;
