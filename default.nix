@@ -9,7 +9,7 @@
     }:
     {
       packages = {
-        nord-ts-check = pkgs.writeShellApplication {
+        ts-check = pkgs.writeShellApplication {
           name = "ts-check";
           runtimeInputs = [
             pkgs.protobuf

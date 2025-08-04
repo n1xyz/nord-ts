@@ -15,7 +15,7 @@
   ],
   "scripts": {
     "gen:proto": "bunx @bufbuild/buf generate ../engine",
-    "gen:api": "nix run ..#nord-openapi | bunx openapi-typescript > src/gen/openapi.ts",
+    "gen:api": "nix run ..#openapi | bunx openapi-typescript > src/gen/openapi.ts",
     "gen": "bun run gen:proto && bun run gen:api",
     "build": "bun run gen && bunx tsc && bun run docs",
     "docs": "bunx typedoc --out ./docs ./src",
