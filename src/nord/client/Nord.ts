@@ -307,7 +307,7 @@ export class Nord {
         Buffer.from(x.payload, "base64"),
         proto.ActionSchema,
       ),
-      physicalExecTime: new Date(x.physicalTime * 1000),
+      physicalExecTime: new Date(x.physicalTime),
     }));
   }
 
