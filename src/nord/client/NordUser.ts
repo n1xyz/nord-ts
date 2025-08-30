@@ -15,7 +15,7 @@ import * as ed from "@noble/ed25519";
 import { sha512 } from "@noble/hashes/sha512";
 ed.etc.sha512Sync = sha512;
 import { floatToScaledBigIntLossy } from "@n1xyz/proton";
-import { FillMode, Side, SPLTokenInfo } from "../../types";
+import { FillMode, Side, SPLTokenInfo, QuoteSize } from "../../types";
 import * as proto from "../../gen/nord_pb";
 import {
   BigIntValue,
@@ -92,8 +92,8 @@ export interface PlaceOrderParams {
   /** Order price */
   price?: Decimal.Value;
 
-  /** Quote size (for market orders) */
-  quoteSize?: Decimal.Value;
+  /** Quote size object (requires non-zero price and size) */
+  quoteSize?: QuoteSize;
 
   /** Account ID to place the order from */
   accountId?: number;
@@ -147,8 +147,8 @@ export interface UserAtomicSubaction {
   /** Order price */
   price?: Decimal.Value;
 
-  /** Quote size (for market orders) */
-  quoteSize?: Decimal.Value;
+  /** Quote size object (for market-style placement) */
+  quoteSize?: QuoteSize;
 
   /** The client order ID of the order. */
   clientOrderId?: BigIntValue;
@@ -911,8 +911,7 @@ export class NordUser {
             priceDecimals: market.priceDecimals,
             size: act.size,
             price: act.price,
-            quoteSizeSize: act.quoteSize, // treated as quote size; we pass only size component
-            quoteSizePrice: undefined,
+            quoteSize: act.quoteSize,
             clientOrderId: act.clientOrderId,
           } as ApiAtomicSubaction;
         }

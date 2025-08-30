@@ -1,7 +1,13 @@
 import Decimal from "decimal.js";
 import * as proto from "../../gen/nord_pb";
 import { create } from "@bufbuild/protobuf";
-import { FillMode, fillModeToProtoFillMode, KeyType, Side } from "../../types";
+import {
+  FillMode,
+  fillModeToProtoFillMode,
+  KeyType,
+  Side,
+  QuoteSize,
+} from "../../types";
 import {
   assert,
   BigIntValue,
@@ -219,7 +225,7 @@ export async function placeOrder(
     // NOTE: if `size` equals 1.0, it will sell whole unit, for example 1.0 BTC
     size?: Decimal.Value;
     price?: Decimal.Value;
-    quoteSize?: Decimal.Value;
+    quoteSize?: QuoteSize;
     liquidateeId?: number;
     clientOrderId?: BigIntValue;
   },
@@ -230,8 +236,10 @@ export async function placeOrder(
 }> {
   const price = toScaledU64(params.price ?? 0, params.priceDecimals);
   const size = toScaledU64(params.size ?? 0, params.sizeDecimals);
-  const quoteSize = toScaledU64(params.quoteSize ?? 0, params.sizeDecimals);
-  const quotePrice = 0n; // Always 0 for now based on existing code
+
+  const scaledQuote = params.quoteSize
+    ? params.quoteSize.toScaledU64(params.priceDecimals, params.sizeDecimals)
+    : undefined;
 
   const action = createAction(currentTimestamp, nonce, {
     case: "placeOrder",
@@ -244,10 +252,13 @@ export async function placeOrder(
       isReduceOnly: params.isReduceOnly,
       price,
       size,
-      quoteSize: create(proto.QuoteSizeSchema, {
-        size: quoteSize,
-        price: quotePrice,
-      }),
+      quoteSize:
+        scaledQuote === undefined
+          ? undefined
+          : create(proto.QuoteSizeSchema, {
+              size: scaledQuote.size,
+              price: scaledQuote.price,
+            }),
       clientOrderId:
         params.clientOrderId === undefined
           ? undefined
@@ -385,8 +396,7 @@ export type AtomicSubaction =
       // at least one of the three has to be specified; 0 treated as "not set"
       size?: Decimal.Value;
       price?: Decimal.Value;
-      quoteSizeSize?: Decimal.Value;
-      quoteSizePrice?: Decimal.Value;
+      quoteSize?: QuoteSize;
       clientOrderId?: BigIntValue;
     }
   | {
@@ -417,11 +427,10 @@ export async function atomic(
     if (a.kind === "place") {
       const price = toScaledU64(a.price ?? 0, a.priceDecimals);
       const size = toScaledU64(a.size ?? 0, a.sizeDecimals);
-      const quoteSizeSize = toScaledU64(a.quoteSizeSize ?? 0, a.sizeDecimals);
-      const quoteSizePrice = toScaledU64(
-        a.quoteSizePrice ?? 0,
-        a.priceDecimals,
-      );
+      const scaledQuote = a.quoteSize
+        ? a.quoteSize.toScaledU64(a.priceDecimals, a.sizeDecimals)
+        : undefined;
+
       const tradeOrPlace: proto.TradeOrPlace = create(
         proto.TradeOrPlaceSchema,
         {
@@ -434,10 +443,13 @@ export async function atomic(
           limit: create(proto.OrderLimitSchema, {
             price,
             size,
-            quoteSize: create(proto.QuoteSizeSchema, {
-              size: quoteSizeSize,
-              price: quoteSizePrice,
-            }),
+            quoteSize:
+              scaledQuote === undefined
+                ? undefined
+                : create(proto.QuoteSizeSchema, {
+                    size: scaledQuote.size,
+                    price: scaledQuote.price,
+                  }),
           }),
           clientOrderId:
             a.clientOrderId === undefined ? undefined : BigInt(a.clientOrderId),

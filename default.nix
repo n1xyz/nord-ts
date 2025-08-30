@@ -15,7 +15,7 @@
             pkgs.protobuf
             pkgs.pnpm
           ];
-          text = builtins.readFile ./check.sh;
+          text = "bun run all";
         };
       };
     };

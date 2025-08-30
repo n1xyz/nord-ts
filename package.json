@@ -22,7 +22,8 @@
     "compile": "tsc",
     "clean": "rm -rf ./src/gen ./dist ./docs",
     "fmt": "prettier --write src tests",
-    "ci": "bunx eslint && prettier --check src tests"
+    "ci": "bunx eslint && prettier --check src tests",
+    "all": "bun install && bun run build && bun run ci && bun fmt"
   },
   "devDependencies": {
     "@bufbuild/protoc-gen-es": "^2.6.3",

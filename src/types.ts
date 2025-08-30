@@ -1,5 +1,7 @@
 import * as proto from "./gen/nord_pb";
 import type { components } from "./gen/openapi.ts";
+import Decimal from "decimal.js";
+import { toScaledU64 } from "./utils";
 
 /**
  * The peak TPS rate is queried over the specified period.
@@ -299,4 +301,33 @@ export interface SPLTokenInfo {
   precision: number;
   tokenId: number;
   name: string;
+}
+
+// Positive decimal price and size.
+export class QuoteSize {
+  price: Decimal;
+  size: Decimal;
+  constructor(quotePrice: Decimal.Value, quoteSize: Decimal.Value) {
+    const p = new Decimal(quotePrice);
+    const s = new Decimal(quoteSize);
+    if (p.isZero() || s.isZero()) {
+      throw new Error("quotePrice and quoteSize must be non-zero");
+    }
+    this.price = p;
+    this.size = s;
+  }
+
+  value(): Decimal {
+    return this.price.mul(this.size);
+  }
+
+  toScaledU64(
+    marketPriceDecimals: number,
+    marketSizeDecimals: number,
+  ): { price: bigint; size: bigint } {
+    return {
+      price: toScaledU64(this.price, marketPriceDecimals),
+      size: toScaledU64(this.size, marketSizeDecimals),
+    };
+  }
 }

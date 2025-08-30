@@ -102,6 +102,7 @@ export function makeWalletSignFn(
     signingKey.sign(ethers.hashMessage(message)).serialized;
 }
 
+// Returned numbers do fit into specified bits range, or error is thrown.
 function makeToScaledBigUint(params: {
   precision: number;
   exponent: number;
