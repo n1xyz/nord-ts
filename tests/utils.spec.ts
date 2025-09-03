@@ -4,6 +4,7 @@ import Decimal from "decimal.js";
 import * as proto from "../src/gen/nord_pb";
 import { create } from "@bufbuild/protobuf";
 import { sizeDelimitedEncode } from "@bufbuild/protobuf/wire";
+import { QuoteSize } from "../src/types";
 
 describe("toScaledU64", () => {
   // Used as scaling medium
@@ -88,7 +89,7 @@ describe("toScaledU128", () => {
 });
 
 describe("proto.Action encode-decode loop", () => {
-  const action = create(proto.ActionSchema, {
+  const action_1 = create(proto.ActionSchema, {
     currentTimestamp: 0n,
     nonce: 0,
     kind: {
@@ -107,13 +108,38 @@ describe("proto.Action encode-decode loop", () => {
     },
   });
 
-  it("action encode-decode roundabout should succeed", () => {
-    const encoded = sizeDelimitedEncode(proto.ActionSchema, action);
-    const decoded: proto.Action = decodeLengthDelimited(
-      encoded,
-      proto.ActionSchema,
-    );
+  const quoteSize = new QuoteSize(25, 107_000);
+  const priceSize = quoteSize.toScaledU64(3, 4);
+  const action_2 = create(proto.ActionSchema, {
+    currentTimestamp: 0n,
+    nonce: 0,
+    kind: {
+      case: "placeOrder",
+      value: create(proto.Action_PlaceOrderSchema, {
+        sessionId: 42n,
+        marketId: 9,
+        fillMode: proto.FillMode.LIMIT,
+        side: proto.Side.ASK,
+        isReduceOnly: false,
+        quoteSize: create(proto.QuoteSizeSchema, {
+          size: priceSize.size,
+          price: priceSize.price,
+        }),
+        clientOrderId: 350n,
+      }),
+    },
+  });
 
-    expect(decoded).toEqual(action);
+  it("action encode-decode roundabout should succeed", () => {
+    function assert_encdec(action: proto.Action) {
+      const encoded = sizeDelimitedEncode(proto.ActionSchema, action);
+      const decoded: proto.Action = decodeLengthDelimited(
+        encoded,
+        proto.ActionSchema,
+      );
+      expect(decoded).toEqual(action);
+    }
+    assert_encdec(action_1);
+    assert_encdec(action_2);
   });
 });

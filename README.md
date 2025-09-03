@@ -6,10 +6,13 @@ This package provides an interface to interact with the Nord exchange. The core 
 
 ```bash
 # npm
-npm install nord-ts
+npm install @n1xyz/nord-ts
 
 # yarn
-yarn add nord-ts
+yarn add @n1xyz/nord-ts
+
+# bun
+bun add @n1xyz/nord-ts
 ```
 
 ## Key Components
@@ -36,7 +39,7 @@ The `NordUser` class represents a user account on the Nord exchange:
 ### Initializing Nord
 
 ```typescript
-import { Nord } from "nord-ts";
+import { Nord } from "@n1xyz/nord-ts";
 
 // Create a Nord instance
 const nord = new Nord({
@@ -52,7 +55,7 @@ await Nord.initNord(nord); // Initialize client (derives program ID, fetches inf
 ### Creating a User from Private Key
 
 ```typescript
-import { Nord, NordUser } from "nord-ts";
+import { Nord, NordUser } from "@n1xyz/nord-ts";
 import { Connection } from "@solana/web3.js";
 
 // Define Nord configuration
@@ -83,7 +86,7 @@ await user.fetchInfo();
 ### Trading Operations
 
 ```typescript
-import { Nord, NordUser, Side, FillMode } from "nord-ts";
+import { Nord, NordUser, Side, FillMode } from "@n1xyz/nord-ts";
 
 // Assuming nord and user are already initialized
 
@@ -110,7 +113,7 @@ try {
 ### Deposits and Withdrawals
 
 ```typescript
-import { Nord, NordUser } from "nord-ts";
+import { Nord, NordUser } from "@n1xyz/nord-ts";
 
 // Assuming nord and user are already initialized
 
@@ -119,7 +122,7 @@ try {
   const tokenId = 0; // USDC
   const amount = 100; // 100 USDC
   
-  await user.withdraw(tokenId, amount);
+  await user.withdraw({ tokenId, amount });
   console.log(`Successfully withdrew ${amount} of token ID ${tokenId}`);
 } catch (error) {
   console.error(`Withdrawal error: ${error}`);
@@ -140,7 +143,7 @@ try {
 ### Market Data
 
 ```typescript
-import { Nord } from "nord-ts";
+import { Nord } from "@n1xyz/nord-ts";
 
 // Assuming nord is already initialized
 
@@ -150,7 +153,7 @@ console.log('Bids:', orderbook.bids);
 console.log('Asks:', orderbook.asks);
 
 // Get recent trades
-const trades = await nord.getTrades({ marketId: 0, limit: 10 });
+const trades = await nord.getTrades({ marketId: 0, pageSize: 10 });
 console.log('Recent trades:', trades.trades);
 
 // Subscribe to real-time orderbook updates
@@ -164,12 +167,12 @@ orderbookSub.on('update', (data) => {
 
 
 ```typescript
-import { Nord, NordUser } from "nord-ts";
+import { Nord, NordUser } from "@n1xyz/nord-ts";
 
 // Assuming nord and user are already initialized
 
-// Get account information
-const accountInfo = await user.fetchInfo();
+// Refresh user info
+await user.fetchInfo();
 
 // Access user balances
 console.log('Balances:', user.balances);
@@ -185,12 +188,13 @@ console.log('Orders:', user.orders);
 
 ```bash
 # Install dependencies
-yarn
+bun
 
 # Build the package
-yarn build
+bun run build
 ```
 
-## Documentation
+## Internals
 
-For more detailed documentation, please refer to the source code and inline comments in the `Nord` and `NordUser` classes.
+- `openapi` provides the OpenAPI-generated interfaces for HTTP (and partially WS) API of Nord
+- `nord_pb` provides the Protobuf-generated binary interface to build actions to be posted to `/action` API.

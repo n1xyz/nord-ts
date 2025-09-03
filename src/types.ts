@@ -310,8 +310,8 @@ export class QuoteSize {
   constructor(quotePrice: Decimal.Value, quoteSize: Decimal.Value) {
     const p = new Decimal(quotePrice);
     const s = new Decimal(quoteSize);
-    if (p.isZero() || s.isZero()) {
-      throw new Error("quotePrice and quoteSize must be non-zero");
+    if (!p.isPositive() || !s.isPositive()) {
+      throw new Error("quotePrice and quoteSize must be positive");
     }
     this.price = p;
     this.size = s;

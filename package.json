@@ -1,6 +1,6 @@
 {
   "name": "@n1xyz/nord-ts",
-  "version": "0.0.22",
+  "version": "0.1.0",
   "description": "Typescript for Nord",
   "keywords": [],
   "author": "",
@@ -58,5 +58,6 @@
     "openapi-fetch": "^0.14.0",
     "tweetnacl": "^1.0.3",
     "ws": "^8.18.3"
-  }
+  },
+  "private": true
 }

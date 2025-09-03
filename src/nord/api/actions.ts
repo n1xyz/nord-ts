@@ -1,5 +1,8 @@
 import Decimal from "decimal.js";
 import * as proto from "../../gen/nord_pb";
+import { paths, components } from "../../gen/openapi";
+import createClient from "openapi-fetch";
+
 import { create } from "@bufbuild/protobuf";
 import {
   FillMode,
@@ -54,25 +57,23 @@ async function sendAction(
   action: proto.Action,
   actionErrorDesc: string,
 ): Promise<proto.Receipt> {
-  const encoded = sizeDelimitedEncode(proto.ActionSchema, action);
-  // validate the payload size
-  const MAX_PAYLOAD_SIZE = 100 * 1024; // 100 kB
-  if (encoded.byteLength > MAX_PAYLOAD_SIZE) {
-    throw new Error(
-      `Encoded message size (${encoded.byteLength} bytes) is greater than max payload size (${MAX_PAYLOAD_SIZE} bytes).`,
-    );
-  }
-  const body = await makeSignedMessage(encoded);
-
-  // TODO: this should be changed to use openapi
-  const response = await checkedFetch(`${serverUrl}/action`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const body = await prepareAction(action, makeSignedMessage);
+  // NOTE: restructure and reuse client as it is in Nord.ts
+  const client = createClient<paths>({ baseUrl: serverUrl });
+  const response = await client.POST("/action", {
+    params: {
+      header: {
+        "content-type": "application/octet-stream",
+      },
     },
-    body,
+    body: body,
   });
-  const rawResp = new Uint8Array(await response.arrayBuffer());
+
+  if (response.error) {
+    throw new Error(`Failed to ${actionErrorDesc}, HTTP status ${response}`);
+  }
+
+  const rawResp = new Uint8Array(await response.response.arrayBuffer());
 
   const resp: proto.Receipt = decodeLengthDelimited(
     rawResp,
@@ -86,6 +87,24 @@ async function sendAction(
   }
 
   return resp;
+}
+
+// Given action and signature function, prepare the signed message to send to server as `body`.
+// `makeSignedMessage` must include the original message and signature.
+export async function prepareAction(
+  action: proto.Action,
+  makeSignedMessage: (message: Uint8Array) => Promise<Uint8Array>,
+) {
+  const encoded = sizeDelimitedEncode(proto.ActionSchema, action);
+  // NOTE(agent): keep in sync with MAX_HTTP_REQUEST_BODY_SIZE in rust code
+  const MAX_HTTP_REQUEST_BODY_SIZE = 1024;
+  if (encoded.byteLength > MAX_HTTP_REQUEST_BODY_SIZE) {
+    throw new Error(
+      `Encoded message size (${encoded.byteLength} bytes) is greater than max payload size (${MAX_HTTP_REQUEST_BODY_SIZE} bytes).`,
+    );
+  }
+  const body = await makeSignedMessage(encoded);
+  return body;
 }
 
 export async function createSession(
@@ -240,6 +259,11 @@ export async function placeOrder(
   const scaledQuote = params.quoteSize
     ? params.quoteSize.toScaledU64(params.priceDecimals, params.sizeDecimals)
     : undefined;
+
+  assert(
+    price > 0n || size > 0n || scaledQuote !== undefined,
+    "OrderLimit must include at least one of: size, price, or quoteSize",
+  );
 
   const action = createAction(currentTimestamp, nonce, {
     case: "placeOrder",
@@ -430,6 +454,12 @@ export async function atomic(
       const scaledQuote = a.quoteSize
         ? a.quoteSize.toScaledU64(a.priceDecimals, a.sizeDecimals)
         : undefined;
+
+      // Require at least one limit to be set (non-zero size, non-zero price, or quoteSize)
+      assert(
+        price > 0n || size > 0n || scaledQuote !== undefined,
+        "OrderLimit must include at least one of: size, price, or quoteSize",
+      );
 
       const tradeOrPlace: proto.TradeOrPlace = create(
         proto.TradeOrPlaceSchema,
