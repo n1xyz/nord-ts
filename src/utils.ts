@@ -17,6 +17,7 @@ export const SESSION_TTL: bigint = 60n * 60n * 24n * 30n;
 export const ZERO_DECIMAL = new Decimal(0);
 export const MAX_BUFFER_LEN = 10_000;
 
+// Max size of data returned from Nord endpoints
 const MAX_PAYLOAD_SIZE = 100 * 1024; // 100 kB
 
 /** Any type convertible to bigint */

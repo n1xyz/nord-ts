@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 import * as proto from "../../gen/nord_pb";
-import { paths, components } from "../../gen/openapi";
+import { paths } from "../../gen/openapi";
 import createClient from "openapi-fetch";
 
 import { create } from "@bufbuild/protobuf";
@@ -14,7 +14,6 @@ import {
 import {
   assert,
   BigIntValue,
-  checkedFetch,
   checkPubKeyLength,
   decodeLengthDelimited,
   SESSION_TTL,
@@ -55,7 +54,6 @@ async function sendAction(
   serverUrl: string,
   makeSignedMessage: (message: Uint8Array) => Promise<Uint8Array>,
   action: proto.Action,
-  actionErrorDesc: string,
 ): Promise<proto.Receipt> {
   const body = await prepareAction(action, makeSignedMessage);
   // NOTE: restructure and reuse client as it is in Nord.ts
@@ -67,13 +65,19 @@ async function sendAction(
       },
     },
     body: body,
+    // NOTE: openapi-fetch ignores headers and types/const headers in schema, and always assume all things are JSON
+    // to handle multi type bodies, need these overrides and later adhoc parsing
+    bodySerializer: (body) => body,
+    parseAs: "stream",
   });
 
   if (response.error) {
-    throw new Error(`Failed to ${actionErrorDesc}, HTTP status ${response}`);
+    throw new Error(
+      `Failed to ${action.kind.case}, HTTP status ${JSON.stringify(response.error)}`,
+    );
   }
 
-  const rawResp = new Uint8Array(await response.response.arrayBuffer());
+  const rawResp = new Uint8Array(await response.response.bytes());
 
   const resp: proto.Receipt = decodeLengthDelimited(
     rawResp,
@@ -82,7 +86,7 @@ async function sendAction(
 
   if (resp.kind?.case === "err") {
     throw new Error(
-      `Could not ${actionErrorDesc}, reason: ${proto.Error[resp.kind.value]}`,
+      `Could not execute ${action.kind.case}, reason: ${proto.Error[resp.kind.value]}`,
     );
   }
 
@@ -96,14 +100,21 @@ export async function prepareAction(
   makeSignedMessage: (message: Uint8Array) => Promise<Uint8Array>,
 ) {
   const encoded = sizeDelimitedEncode(proto.ActionSchema, action);
-  // NOTE(agent): keep in sync with MAX_HTTP_REQUEST_BODY_SIZE in rust code
-  const MAX_HTTP_REQUEST_BODY_SIZE = 1024;
-  if (encoded.byteLength > MAX_HTTP_REQUEST_BODY_SIZE) {
+  // NOTE(agent): keep in sync with MAX_ENCODED_ACTION_SIZE in Rust code
+  const MAX_ENCODED_ACTION_SIZE = 1024;
+  if (encoded.byteLength > MAX_ENCODED_ACTION_SIZE) {
+    console.warn("Encoded message:", encoded);
     throw new Error(
-      `Encoded message size (${encoded.byteLength} bytes) is greater than max payload size (${MAX_HTTP_REQUEST_BODY_SIZE} bytes).`,
+      `Encoded message size (${encoded.byteLength} bytes) is greater than max payload size (${MAX_ENCODED_ACTION_SIZE} bytes).`,
     );
   }
   const body = await makeSignedMessage(encoded);
+  if (body.byteLength > MAX_ENCODED_ACTION_SIZE) {
+    console.warn("Encoded length:", encoded.byteLength);
+    throw new Error(
+      `Signed message size (${body.byteLength} bytes) is greater than max payload size (${MAX_ENCODED_ACTION_SIZE} bytes).`,
+    );
+  }
   return body;
 }
 
@@ -147,7 +158,6 @@ export async function createSession(
     serverUrl,
     (m) => walletSign(walletSignFn, m),
     action,
-    "create a new session",
   );
 
   if (resp.kind?.case === "createSessionResult") {
@@ -180,7 +190,6 @@ export async function revokeSession(
     serverUrl,
     (m) => walletSign(walletSignFn, m),
     action,
-    "revoke session",
   );
 
   return { actionId: resp.actionId };
@@ -217,7 +226,6 @@ export async function withdraw(
     serverUrl,
     (m) => sessionSign(signFn, m),
     action,
-    "withdraw",
   );
 
   if (resp.kind?.case === "withdrawResult") {
@@ -295,7 +303,6 @@ export async function placeOrder(
     serverUrl,
     (m) => sessionSign(signFn, m),
     action,
-    "place order",
   );
 
   if (resp.kind?.case === "placeOrderResult") {
@@ -339,7 +346,6 @@ export async function cancelOrder(
     serverUrl,
     (m) => sessionSign(signFn, m),
     action,
-    "cancel order",
   );
 
   if (resp.kind?.case === "cancelOrderResult") {
@@ -389,7 +395,6 @@ export async function transfer(
     serverUrl,
     (m) => sessionSign(signFn, m),
     action,
-    "transfer",
   );
 
   if (resp.kind?.case === "transferred") {
@@ -510,7 +515,6 @@ export async function atomic(
     serverUrl,
     (m) => sessionSign(signFn, m),
     action,
-    "execute atomic action",
   );
   if (resp.kind?.case === "atomic") {
     return {
