@@ -304,9 +304,22 @@ export interface SPLTokenInfo {
 }
 
 // Positive decimal price and size.
+// Example:
+// ```
+// const limit = new QuoteSize(new Decimal(114000), new Decimal(0.00035)),
+//```
+// Gives 40$ USD limit.
+//
+// Given price is same(or very close) to the market price,
+// limit gives size tick as close as possible to settlemnt size tick.
+
+// If you want to get smaller tick on client (on server it will not change),
+// do `new QuoteSize(new Decimal(114000/2), new Decimal(0.00070))`.
+// It will be 40$ limit, but may help if BTC suddently moves fast.
 export class QuoteSize {
   price: Decimal;
   size: Decimal;
+  /// Input can be only positive values.
   constructor(quotePrice: Decimal.Value, quoteSize: Decimal.Value) {
     const p = new Decimal(quotePrice);
     const s = new Decimal(quoteSize);
@@ -317,11 +330,13 @@ export class QuoteSize {
     this.size = s;
   }
 
+  // USD value of limit, use for debug
   value(): Decimal {
     return this.price.mul(this.size);
   }
 
-  toScaledU64(
+  // Converts to wire format to be send to server, scaling price and size according to market decimals.
+  toWire(
     marketPriceDecimals: number,
     marketSizeDecimals: number,
   ): { price: bigint; size: bigint } {

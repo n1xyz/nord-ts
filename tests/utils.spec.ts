@@ -109,7 +109,7 @@ describe("proto.Action encode-decode loop", () => {
   });
 
   const quoteSize = new QuoteSize(25, 107_000);
-  const priceSize = quoteSize.toScaledU64(3, 4);
+  const priceSize = quoteSize.toWire(3, 4);
   const action_2 = create(proto.ActionSchema, {
     currentTimestamp: 0n,
     nonce: 0,

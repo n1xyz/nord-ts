@@ -265,7 +265,7 @@ export async function placeOrder(
   const size = toScaledU64(params.size ?? 0, params.sizeDecimals);
 
   const scaledQuote = params.quoteSize
-    ? params.quoteSize.toScaledU64(params.priceDecimals, params.sizeDecimals)
+    ? params.quoteSize.toWire(params.priceDecimals, params.sizeDecimals)
     : undefined;
 
   assert(
@@ -457,7 +457,7 @@ export async function atomic(
       const price = toScaledU64(a.price ?? 0, a.priceDecimals);
       const size = toScaledU64(a.size ?? 0, a.sizeDecimals);
       const scaledQuote = a.quoteSize
-        ? a.quoteSize.toScaledU64(a.priceDecimals, a.sizeDecimals)
+        ? a.quoteSize.toWire(a.priceDecimals, a.sizeDecimals)
         : undefined;
 
       // Require at least one limit to be set (non-zero size, non-zero price, or quoteSize)
