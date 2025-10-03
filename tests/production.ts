@@ -12,7 +12,6 @@
 // Our SLA to be as good as some DNS/CDN service like.
 
 import { createSession } from "../dist/nord/api/actions.js";
-import { Error } from "../dist/gen/nord_pb.js";
 import createClient from "openapi-fetch";
 import { paths } from "../dist/gen/openapi.js";
 import bs58 from "bs58";
@@ -25,8 +24,9 @@ while (true) {
   const response = await client.GET("/account/{account_id}/pubkey", {
     params: { path: { account_id: accountId } },
   });
-  if (response.error) {
-    console.warn("will retry after error", response.error);
+  const { error } = response;
+  if (error) {
+    console.warn("will retry after error", error);
     continue;
   } else {
     const pubkey = response.data as string;
@@ -37,7 +37,7 @@ while (true) {
     const nonce = 1;
 
     try {
-      const res = await createSession(serverUrl, walletSignFn, now, nonce, {
+      const _res = await createSession(serverUrl, walletSignFn, now, nonce, {
         userPubkey: bs58.decode(pubkey),
         sessionPubkey: bs58.decode(pubkey),
       });

@@ -15,7 +15,13 @@ import * as ed from "@noble/ed25519";
 import { sha512 } from "@noble/hashes/sha512";
 ed.etc.sha512Sync = sha512;
 import { floatToScaledBigIntLossy } from "@n1xyz/proton";
-import { FillMode, Side, SPLTokenInfo, QuoteSize } from "../../types";
+import {
+  FillMode,
+  Side,
+  SPLTokenInfo,
+  QuoteSize,
+  TriggerKind,
+} from "../../types";
 import * as proto from "../../gen/nord_pb";
 import {
   BigIntValue,
@@ -34,6 +40,8 @@ import {
   withdraw,
   atomic as atomicAction,
   AtomicSubaction as ApiAtomicSubaction,
+  addTrigger as addTriggerAction,
+  removeTrigger as removeTriggerAction,
 } from "../api/actions";
 import { NordError } from "../utils/NordError";
 import { Nord } from "./Nord";
@@ -96,6 +104,22 @@ export interface PlaceOrderParams {
   quoteSize?: QuoteSize;
 
   /** Account ID to place the order from */
+  accountId?: number;
+}
+
+export interface AddTriggerParams {
+  marketId: number;
+  side: Side;
+  kind: TriggerKind;
+  triggerPrice: Decimal.Value;
+  limitPrice?: Decimal.Value;
+  accountId?: number;
+}
+
+export interface RemoveTriggerParams {
+  marketId: number;
+  side: Side;
+  kind: TriggerKind;
   accountId?: number;
 }
 
@@ -831,6 +855,77 @@ export class NordUser {
       throw new NordError(`Failed to cancel order ${orderId}`, {
         cause: error,
       });
+    }
+  }
+
+  /**
+   * Add a trigger for the current session
+   *
+   * @param params - Trigger parameters including market, side, and prices
+   * @returns Object containing the actionId of the submitted trigger
+   * @throws {NordError} If the operation fails
+   */
+  async addTrigger(params: AddTriggerParams): Promise<{ actionId: bigint }> {
+    try {
+      this.checkSessionValidity();
+      const market = findMarket(this.nord.markets, params.marketId);
+      if (!market) {
+        throw new NordError(`Market with ID ${params.marketId} not found`);
+      }
+      const result = await addTriggerAction(
+        this.nord.webServerUrl,
+        this.sessionSignFn,
+        await this.nord.getTimestamp(),
+        this.getNonce(),
+        {
+          sessionId: optExpect(this.sessionId, "No session"),
+          marketId: params.marketId,
+          side: params.side,
+          kind: params.kind,
+          priceDecimals: market.priceDecimals,
+          triggerPrice: params.triggerPrice,
+          limitPrice: params.limitPrice,
+          accountId: params.accountId,
+        },
+      );
+      return result;
+    } catch (error) {
+      throw new NordError("Failed to add trigger", { cause: error });
+    }
+  }
+
+  /**
+   * Remove a trigger for the current session
+   *
+   * @param params - Trigger parameters identifying the trigger to remove
+   * @returns Object containing the actionId of the removal action
+   * @throws {NordError} If the operation fails
+   */
+  async removeTrigger(
+    params: RemoveTriggerParams,
+  ): Promise<{ actionId: bigint }> {
+    try {
+      this.checkSessionValidity();
+      const market = findMarket(this.nord.markets, params.marketId);
+      if (!market) {
+        throw new NordError(`Market with ID ${params.marketId} not found`);
+      }
+      const result = await removeTriggerAction(
+        this.nord.webServerUrl,
+        this.sessionSignFn,
+        await this.nord.getTimestamp(),
+        this.getNonce(),
+        {
+          sessionId: optExpect(this.sessionId, "No session"),
+          marketId: params.marketId,
+          side: params.side,
+          kind: params.kind,
+          accountId: params.accountId,
+        },
+      );
+      return result;
+    } catch (error) {
+      throw new NordError("Failed to remove trigger", { cause: error });
     }
   }
 

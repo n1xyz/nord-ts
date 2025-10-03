@@ -10,6 +10,7 @@ import {
   KeyType,
   Side,
   QuoteSize,
+  TriggerKind,
 } from "../../types";
 import {
   assert,
@@ -409,6 +410,103 @@ export async function transfer(
   } else {
     throw new Error(`Unexpected receipt kind ${resp.kind?.case}`);
   }
+}
+
+export async function addTrigger(
+  serverUrl: string,
+  signFn: (message: Uint8Array) => Promise<Uint8Array>,
+  currentTimestamp: bigint,
+  nonce: number,
+  params: {
+    sessionId: BigIntValue;
+    marketId: number;
+    side: Side;
+    kind: TriggerKind;
+    priceDecimals: number;
+    triggerPrice: Decimal.Value;
+    limitPrice?: Decimal.Value;
+    accountId?: number;
+  },
+): Promise<{ actionId: bigint }> {
+  const triggerPrice = toScaledU64(params.triggerPrice, params.priceDecimals);
+  assert(triggerPrice > 0n, "Trigger price must be positive");
+  const limitPrice =
+    params.limitPrice === undefined
+      ? undefined
+      : toScaledU64(params.limitPrice, params.priceDecimals);
+  if (limitPrice !== undefined) {
+    assert(limitPrice > 0n, "Limit price must be positive");
+  }
+  const key = create(proto.TriggerKeySchema, {
+    kind:
+      params.kind === TriggerKind.StopLoss
+        ? proto.TriggerKind.STOP_LOSS
+        : proto.TriggerKind.TAKE_PROFIT,
+    side: params.side === Side.Bid ? proto.Side.BID : proto.Side.ASK,
+  });
+  const prices = create(proto.Action_TriggerPricesSchema, {
+    triggerPrice,
+    limitPrice,
+  });
+  const action = createAction(currentTimestamp, nonce, {
+    case: "addTrigger",
+    value: create(proto.Action_AddTriggerSchema, {
+      sessionId: BigInt(params.sessionId),
+      marketId: params.marketId,
+      key,
+      prices,
+      accountId: params.accountId,
+    }),
+  });
+  const resp = await sendAction(
+    serverUrl,
+    (m) => sessionSign(signFn, m),
+    action,
+  );
+  if (resp.kind?.case === "triggerAdded") {
+    return { actionId: resp.actionId };
+  }
+  throw new Error(`Unexpected receipt kind ${resp.kind?.case}`);
+}
+
+export async function removeTrigger(
+  serverUrl: string,
+  signFn: (message: Uint8Array) => Promise<Uint8Array>,
+  currentTimestamp: bigint,
+  nonce: number,
+  params: {
+    sessionId: BigIntValue;
+    marketId: number;
+    side: Side;
+    kind: TriggerKind;
+    accountId?: number;
+  },
+): Promise<{ actionId: bigint }> {
+  const key = create(proto.TriggerKeySchema, {
+    kind:
+      params.kind === TriggerKind.StopLoss
+        ? proto.TriggerKind.STOP_LOSS
+        : proto.TriggerKind.TAKE_PROFIT,
+    side: params.side === Side.Bid ? proto.Side.BID : proto.Side.ASK,
+  });
+  const action = createAction(currentTimestamp, nonce, {
+    case: "removeTrigger",
+    value: create(proto.Action_RemoveTriggerSchema, {
+      sessionId: BigInt(params.sessionId),
+      marketId: params.marketId,
+      key,
+      accountId: params.accountId,
+    }),
+  });
+  const resp = await sendAction(
+    serverUrl,
+    (m) => sessionSign(signFn, m),
+    action,
+  );
+  if (resp.kind?.case === "triggerRemoved") {
+    return { actionId: resp.actionId };
+  }
+  throw new Error(`Unexpected receipt kind ${resp.kind?.case}`);
 }
 
 export type AtomicSubaction =

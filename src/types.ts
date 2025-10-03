@@ -118,8 +118,8 @@ export enum KeyType {
 }
 
 export enum Side {
-  Ask,
-  Bid,
+  Ask = "ask",
+  Bid = "bid",
 }
 
 export enum FillMode {
@@ -127,6 +127,18 @@ export enum FillMode {
   PostOnly,
   ImmediateOrCancel,
   FillOrKill,
+}
+
+export enum TriggerKind {
+  StopLoss = 0,
+  TakeProfit = 1,
+}
+
+export enum TriggerStatus {
+  Active = 0,
+  Success = 1,
+  Cancel = 2,
+  Remove = 4,
 }
 
 export interface SubscriberConfig {
