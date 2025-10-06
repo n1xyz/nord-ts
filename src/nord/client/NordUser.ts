@@ -43,6 +43,15 @@ import {
   addTrigger as addTriggerAction,
   removeTrigger as removeTriggerAction,
 } from "../api/actions";
+import type {
+  AccountTriggerInfo,
+  TriggerHistoryPage,
+  HistoryTriggerQuery,
+} from "../api/triggers";
+import {
+  getAccountTriggers as fetchAccountTriggers,
+  getAccountTriggerHistory as fetchAccountTriggerHistory,
+} from "../api/triggers";
 import { NordError } from "../utils/NordError";
 import { Nord } from "./Nord";
 
@@ -926,6 +935,61 @@ export class NordUser {
       return result;
     } catch (error) {
       throw new NordError("Failed to remove trigger", { cause: error });
+    }
+  }
+
+  /**
+   * Fetch active triggers for an account.
+   *
+   * @param params Optional parameters containing an explicit account id.
+   * @throws {NordError} If no account can be resolved or the request fails.
+   */
+  async getAccountTriggers(params?: {
+    accountId?: number;
+  }): Promise<AccountTriggerInfo[]> {
+    const accountId = params?.accountId ?? this.accountIds?.[0];
+
+    if (accountId == null) {
+      throw new NordError(
+        "Account ID is undefined. Make sure to call updateAccountId() before requesting triggers.",
+      );
+    }
+
+    try {
+      return await fetchAccountTriggers(this.nord.webServerUrl, accountId);
+    } catch (error) {
+      throw new NordError("Failed to fetch account triggers", { cause: error });
+    }
+  }
+
+  /**
+   * Fetch trigger history for an account.
+   *
+   * @param params Optional parameters with account id and history query filters.
+   * @throws {NordError} If no account can be resolved or the request fails.
+   */
+  async getAccountTriggerHistory(
+    params: HistoryTriggerQuery & { accountId?: number },
+  ): Promise<TriggerHistoryPage> {
+    const { accountId: providedAccountId, ...query } = params;
+    const accountId = providedAccountId ?? this.accountIds?.[0];
+
+    if (accountId == null) {
+      throw new NordError(
+        "Account ID is undefined. Make sure to call updateAccountId() before requesting trigger history.",
+      );
+    }
+
+    try {
+      return await fetchAccountTriggerHistory(
+        this.nord.webServerUrl,
+        accountId,
+        query,
+      );
+    } catch (error) {
+      throw new NordError("Failed to fetch account trigger history", {
+        cause: error,
+      });
     }
   }
 
