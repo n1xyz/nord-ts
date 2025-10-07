@@ -6,6 +6,8 @@ import * as proto from "../../gen/nord_pb";
 import type { paths } from "../../gen/openapi.ts";
 import {
   Account,
+  AccountPnlPage,
+  AccountPnlQuery,
   ActionResponse,
   AggregateMetrics,
   Info,
@@ -632,6 +634,31 @@ export class Nord {
     return await this.GET("/account/{account_id}", {
       params: {
         path: { account_id: accountId },
+      },
+    });
+  }
+
+  /**
+   * Get profit and loss history for an account
+   *
+   * @param accountId - Account ID to query
+   * @param query - Optional time and pagination filters
+   * @returns Page of PnL entries ordered from latest to oldest
+   * @throws {NordError} If the request fails
+   */
+  public async getAccountPnl(
+    accountId: number,
+    query?: Partial<AccountPnlQuery>,
+  ): Promise<AccountPnlPage> {
+    return await this.GET("/account/{account_id}/pnl", {
+      params: {
+        path: { account_id: accountId },
+        query: {
+          since: query?.since,
+          until: query?.until,
+          startInclusive: query?.startInclusive,
+          pageSize: query?.pageSize,
+        },
       },
     });
   }

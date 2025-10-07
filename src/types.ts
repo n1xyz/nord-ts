@@ -88,6 +88,10 @@ export type SideFromApi = components["schemas"]["Side"];
 export type FillModeFromApi = components["schemas"]["FillMode"];
 export type PlacementOrigin = components["schemas"]["PlacementOrigin"];
 export type FinalizationReason = components["schemas"]["FinalizationReason"];
+export type AccountPnlQuery = components["schemas"]["AccountPnlQuery"];
+export type AccountPnl = components["schemas"]["AccountPnl"];
+export type AccountPnlPage =
+  components["schemas"]["PageResult_for_uint64_and_AccountPnl"];
 
 /**
  * Configuration options for the Nord client
