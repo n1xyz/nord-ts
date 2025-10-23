@@ -44,7 +44,7 @@ import { Nord } from "@n1xyz/nord-ts";
 // Create a Nord instance
 const nord = new Nord({
   webServerUrl: 'https://api.nord.exchange',
-  bridgeVk: 'your_bridge_vk', // Provide the bridge verification key
+  app: 'your_app_addr', // Provide the app verification key
   solanaUrl: 'https://api.mainnet-beta.solana.com',
 });
 
@@ -61,7 +61,7 @@ import { Connection } from "@solana/web3.js";
 // Define Nord configuration
 const nordConfig = {
   webServerUrl: 'https://api.nord.exchange',
-  bridgeVk: 'your_bridge_vk', // Provide the bridge verification key
+  app: 'your_app_addr', // Provide the app verification key
   solanaUrl: 'https://api.mainnet-beta.solana.com',
 };
 

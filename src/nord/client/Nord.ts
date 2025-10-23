@@ -55,9 +55,6 @@ export class Nord {
   /** Base URL for the Nord web server */
   public readonly webServerUrl: string;
 
-  /** Bridge verification key */
-  public readonly bridgeVk: PublicKey;
-
   /** Solana RPC URL */
   public readonly solanaUrl: string;
 
@@ -70,7 +67,7 @@ export class Nord {
   /** Map of symbol to market_id */
   private symbolToMarketId: Map<string, number> = new Map();
 
-  /** Proton client for bridge and hansel operations */
+  /** Proton client for proton related operations */
   public protonClient: ProtonClient;
 
   /** HTTP client for Nord operations */
@@ -81,23 +78,19 @@ export class Nord {
    *
    * @param config - Configuration options for the Nord client
    * @param config.webServerUrl - Base URL for the Nord web server
-   * @param config.bridgeVk - Bridge verification key
    * @param config.solanaUrl - Solana cluster URL
    * @throws {Error} If required configuration is missing
    */
   private constructor({
-    bridgeVk,
     solanaUrl,
     webServerUrl,
     protonClient,
   }: Readonly<{
-    bridgeVk: PublicKey;
     solanaUrl: string;
     webServerUrl: string;
     protonClient: ProtonClient;
   }>) {
     this.webServerUrl = webServerUrl;
-    this.bridgeVk = bridgeVk;
     this.solanaUrl = solanaUrl;
     this.protonClient = protonClient;
     this.httpClient = createClient<paths>({ baseUrl: webServerUrl });
@@ -226,13 +219,13 @@ export class Nord {
    *
    * @param nordConfig - Configuration options for the Nord client
    * @param nordConfig.webServerUrl - Base URL for the Nord web server
-   * @param nordConfig.bridgeVk - Bridge verification key
+   * @param nordConfig.app - App address
    * @param nordConfig.solanaUrl - Solana cluster URL
    * @returns Initialized Nord client
    * @throws {NordError} If initialization fails
    */
   public static async initNord({
-    bridgeVk: bridgeVk_,
+    app,
     solanaUrl,
     webServerUrl,
   }: Readonly<NordConfig>): Promise<Nord> {
@@ -240,14 +233,12 @@ export class Nord {
     // this is a dogshit api, only here to be compatible with the shitty
     // vibecoded code and not break zero one team's workflow.
     const connection = new Connection(solanaUrl, { commitment: "confirmed" });
-    const bridgeVk = new PublicKey(bridgeVk_);
     const protonClient = await ProtonClient.init({
       protonUrl: webServerUrl,
-      bridgeVk,
+      app: new PublicKey(app),
       solConn: connection,
     });
     const nord = new Nord({
-      bridgeVk,
       protonClient,
       solanaUrl,
       webServerUrl,

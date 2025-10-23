@@ -38,8 +38,8 @@ export type SubscriptionPattern = `${SubscriptionType}@${string}` | string;
 export interface NordConfig {
   /** Base URL for the Nord web server */
   webServerUrl: string;
-  /** Bridge verification key */
-  bridgeVk: string;
+  /** App address */
+  app: string;
   /** Solana cluster URL */
   solanaUrl: string;
   /**

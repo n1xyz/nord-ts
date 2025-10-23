@@ -486,7 +486,7 @@ export class NordUser {
   }
 
   /**
-   * Deposit SPL tokens to the bridge
+   * Deposit SPL tokens to the app
    *
    * @param amount - Amount to deposit
    * @param tokenId - Token ID
@@ -504,7 +504,7 @@ export class NordUser {
   }
 
   /**
-   * Deposit SPL tokens to the bridge
+   * Deposit SPL tokens to the app
    *
    * @param amount - Amount to deposit
    * @param tokenId - Token ID
