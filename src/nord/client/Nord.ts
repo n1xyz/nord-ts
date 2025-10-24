@@ -10,7 +10,7 @@ import {
   AccountPnlQuery,
   ActionResponse,
   AggregateMetrics,
-  Info,
+  MarketsInfo,
   Market,
   MarketStats,
   NordConfig,
@@ -610,7 +610,7 @@ export class Nord {
    * @returns Information about markets and tokens
    * @throws {NordError} If the request fails
    */
-  public async getInfo(): Promise<Info> {
+  public async getInfo(): Promise<MarketsInfo> {
     return await this.GET("/info", {});
   }
 

@@ -49,9 +49,9 @@ export interface NordConfig {
   initWebSockets?: boolean;
 }
 
-export type Info = components["schemas"]["Info2"];
-export type Market = Info["markets"][number];
-export type Token = Info["tokens"][number];
+export type MarketsInfo = components["schemas"]["MarketsInfo"];
+export type Market = MarketsInfo["markets"][number];
+export type Token = MarketsInfo["tokens"][number];
 export type Account = components["schemas"]["Account"];
 export type TradesResponse =
   components["schemas"]["PageResult_for_String_and_Trade"];
