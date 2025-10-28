@@ -39,7 +39,7 @@ async function walletSign(
 }
 
 // Helper to create an action with common fields
-function createAction(
+export function createAction(
   currentTimestamp: bigint,
   nonce: number,
   kind: proto.Action["kind"],
@@ -51,7 +51,7 @@ function createAction(
   });
 }
 
-async function sendAction(
+export async function sendAction(
   serverUrl: string,
   makeSignedMessage: (message: Uint8Array) => Promise<Uint8Array>,
   action: proto.Action,
@@ -508,7 +508,6 @@ export async function removeTrigger(
   }
   throw new Error(`Unexpected receipt kind ${resp.kind?.case}`);
 }
-
 export type AtomicSubaction =
   | {
       kind: "place";
