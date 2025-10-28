@@ -6,6 +6,7 @@ import { NordError } from "../utils/NordError";
 import { NordClient } from "./NordClient";
 import type { NordClientParams } from "./NordClient";
 import type { NordUser } from "./NordUser";
+import { FeeTierConfig } from "../../gen/nord_pb";
 
 export interface CreateTokenParams {
   tokenDecimals: number;
@@ -47,6 +48,15 @@ export interface UnfreezeMarketParams {
 
 export interface NordAdminParams extends NordClientParams {
   signFn: (message: Uint8Array) => Promise<Uint8Array>;
+}
+
+export interface AddFeeTierParams {
+  config: FeeTierConfig;
+}
+
+export interface UpdateFeeTierParams {
+  tierId: number;
+  config: FeeTierConfig;
 }
 
 export class NordAdmin extends NordClient {
@@ -227,6 +237,52 @@ export class NordAdmin extends NordClient {
       }),
     });
     this.expectReceiptKind(receipt, "marketFreezeUpdated", "unfreeze market");
+    return { actionId: receipt.actionId, ...receipt.kind.value };
+  }
+
+  async addFeeTier(
+    params: AddFeeTierParams,
+  ): Promise<{ actionId: bigint } & proto.Receipt_FeeTierAdded> {
+    const receipt = await this.submitAction({
+      case: "addFeeTier",
+      value: create(proto.Action_AddFeeTierSchema, {
+        config: create(proto.FeeTierConfigSchema, params.config),
+      }),
+    });
+    this.expectReceiptKind(receipt, "feeTierAdded", "add fee tier");
+    return { actionId: receipt.actionId, ...receipt.kind.value };
+  }
+
+  async updateFeeTier(
+    params: UpdateFeeTierParams,
+  ): Promise<{ actionId: bigint } & proto.Receipt_FeeTierUpdated> {
+    const receipt = await this.submitAction({
+      case: "updateFeeTier",
+      value: create(proto.Action_UpdateFeeTierSchema, {
+        id: params.tierId,
+        config: create(proto.FeeTierConfigSchema, params.config),
+      }),
+    });
+    this.expectReceiptKind(receipt, "feeTierUpdated", "update fee tier");
+    return { actionId: receipt.actionId, ...receipt.kind.value };
+  }
+
+  async updateAccountsTier(
+    accounts: number[],
+    tierId: number,
+  ): Promise<{ actionId: bigint } & proto.Receipt_AccountsTierUpdated> {
+    const receipt = await this.submitAction({
+      case: "updateAccountsTier",
+      value: create(proto.Action_UpdateAccountsTierSchema, {
+        accounts,
+        tierId,
+      }),
+    });
+    this.expectReceiptKind(
+      receipt,
+      "accountsTierUpdated",
+      "update accounts tier",
+    );
     return { actionId: receipt.actionId, ...receipt.kind.value };
   }
 }

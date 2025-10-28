@@ -16,6 +16,7 @@ import {
   NordConfig,
   OrderbookQuery,
   OrderbookResponse,
+  FeeTierConfig,
   PeakTpsPeriodUnit,
   SubscriptionPattern,
   Token,
@@ -24,6 +25,7 @@ import {
   AccountTriggerInfo,
   HistoryTriggerQuery,
   TriggerHistoryPage,
+  FeeTierId,
 } from "../../types";
 import * as utils from "../../utils";
 import { NordWebSocketClient } from "../../websocket/index";
@@ -615,6 +617,31 @@ export class Nord {
    */
   public async getInfo(): Promise<MarketsInfo> {
     return await this.GET("/info", {});
+  }
+
+  /**
+   * Fetch the current fee tier brackets configured on Nord.
+   *
+   * @returns Array of fee tier identifiers paired with their configuration
+   * @throws {NordError} If the request fails
+   */
+  public async getFeeBrackets(): Promise<Array<[FeeTierId, FeeTierConfig]>> {
+    return await this.GET("/fee/brackets/info", {});
+  }
+
+  /**
+   * Retrieve the fee tier assigned to a specific account.
+   *
+   * @param accountId - Account identifier to query
+   * @returns Fee tier details for the requested account
+   * @throws {NordError} If the request fails
+   */
+  public async getAccountFeeTier(accountId: number): Promise<FeeTierId> {
+    return await this.GET("/account/{account_id}/fee/tier", {
+      params: {
+        path: { account_id: accountId },
+      },
+    });
   }
 
   /**

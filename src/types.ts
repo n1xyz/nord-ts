@@ -96,6 +96,8 @@ export type AccountTriggerInfo = components["schemas"]["AccountTriggerInfo"];
 export type TriggerHistoryPage =
   components["schemas"]["PageResult_for_uint64_and_HistoryTriggerInfo"];
 export type HistoryTriggerQuery = components["schemas"]["AccountTriggersQuery"];
+export type FeeTierConfig = components["schemas"]["FeeTierConfig"];
+export type FeeTierId = components["schemas"]["FeeTierId"];
 
 /**
  * Configuration options for the Nord client
