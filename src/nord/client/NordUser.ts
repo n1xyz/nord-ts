@@ -21,44 +21,29 @@ import {
   SPLTokenInfo,
   QuoteSize,
   TriggerKind,
-  KeyType,
+  fillModeToProtoFillMode,
 } from "../../types";
 import * as proto from "../../gen/nord_pb";
 import {
   BigIntValue,
   checkedFetch,
-  checkPubKeyLength,
+  assert,
   findMarket,
   findToken,
   optExpect,
   keypairFromPrivateKey,
+  toScaledU64,
 } from "../../utils";
+import { create } from "@bufbuild/protobuf";
 import {
-  cancelOrder,
   createSession,
-  placeOrder,
   revokeSession,
-  transfer,
-  withdraw,
   atomic,
   AtomicSubaction,
-  addTrigger,
-  removeTrigger,
-  createAction,
-  sendAction,
 } from "../api/actions";
-import type {
-  AccountTriggerInfo,
-  TriggerHistoryPage,
-  HistoryTriggerQuery,
-} from "../api/triggers";
-import {
-  getAccountTriggers as fetchAccountTriggers,
-  getAccountTriggerHistory as fetchAccountTriggerHistory,
-} from "../api/triggers";
-import { create } from "@bufbuild/protobuf";
 import { NordError } from "../utils/NordError";
 import { Nord } from "./Nord";
+import { NordClient } from "./NordClient";
 
 /**
  * Parameters for creating a NordUser instance
@@ -90,7 +75,6 @@ export interface NordUserParams {
 
   /** Session public key (required) */
   publicKey: PublicKey;
-  adminSignFn?: (message: Uint8Array) => Promise<Uint8Array>;
 }
 
 /**
@@ -120,6 +104,8 @@ export interface PlaceOrderParams {
 
   /** Account ID to place the order from */
   accountId?: number;
+
+  clientOrderId?: BigIntValue;
 }
 
 export interface AddTriggerParams {
@@ -136,44 +122,6 @@ export interface RemoveTriggerParams {
   side: Side;
   kind: TriggerKind;
   accountId?: number;
-}
-
-export interface CreateTokenParams {
-  tokenDecimals: number;
-  weightBps: number;
-  viewSymbol: string;
-  oracleSymbol: string;
-  solAddr: Uint8Array;
-}
-
-export interface CreateMarketParams {
-  sizeDecimals: number;
-  priceDecimals: number;
-  imfBps: number;
-  cmfBps: number;
-  mmfBps: number;
-  marketType: proto.MarketType;
-  viewSymbol: string;
-  oracleSymbol: string;
-  baseTokenId: number;
-}
-
-export interface PythSetWormholeGuardiansParams {
-  guardianSetIndex: number;
-  addresses: Uint8Array[];
-}
-
-export interface PythSetSymbolFeedParams {
-  oracleSymbol: string;
-  priceFeedId: Uint8Array;
-}
-
-export interface FreezeMarketParams {
-  marketId: number;
-}
-
-export interface UnfreezeMarketParams {
-  marketId: number;
 }
 
 /**
@@ -234,28 +182,7 @@ export interface UserAtomicSubaction {
 /**
  * User class for interacting with the Nord protocol
  */
-export class NordUser {
-  /** Nord client instance */
-  public readonly nord: Nord;
-
-  /** User's blockchain address */
-  public readonly address: PublicKey;
-
-  /** Function to sign messages with the user's wallet */
-  public readonly walletSignFn: (
-    message: Uint8Array | string,
-  ) => Promise<Uint8Array>;
-
-  /** Function to sign messages with the user's session key */
-  public readonly sessionSignFn: (message: Uint8Array) => Promise<Uint8Array>;
-
-  public readonly adminSignFn?: (message: Uint8Array) => Promise<Uint8Array>;
-
-  /** Function to sign transactions with the user's wallet */
-  public readonly transactionSignFn: <T extends Transaction>(
-    tx: T,
-  ) => Promise<T>;
-
+export class NordUser extends NordClient {
   /** User balances by token symbol */
   public balances: {
     [key: string]: { accountId: number; balance: number; symbol: string }[];
@@ -295,28 +222,8 @@ export class NordUser {
   /** User's account IDs */
   public accountIds?: number[];
 
-  /** Current session ID */
-  public sessionId?: bigint;
-
-  /** User's public key */
-  public publicKey: PublicKey;
-
-  /** Session public key */
-  public sessionPubKey: Uint8Array;
-
-  /** Last timestamp used */
-  public lastTs = 0;
-
-  /** Last nonce used */
-  public lastNonce = 0;
-
-  /** Solana connection */
-  public connection: Connection;
-
   /** SPL token information */
   public splTokenInfos: SPLTokenInfo[] = [];
-
-  private adminNonce = 0;
 
   /**
    * Create a new NordUser instance
@@ -334,7 +241,6 @@ export class NordUser {
     walletSignFn,
     connection,
     sessionId,
-    adminSignFn,
   }: NordUserParams) {
     if (!walletSignFn) {
       throw new NordError("Wallet sign function is required");
@@ -346,29 +252,24 @@ export class NordUser {
       throw new NordError("Session public key is required");
     }
 
+    let parsedAddress: PublicKey;
     try {
-      this.address = new PublicKey(address);
+      parsedAddress = new PublicKey(address);
     } catch (error) {
       throw new NordError("Invalid Solana address", { cause: error });
     }
 
-    this.nord = nord;
-    this.walletSignFn = walletSignFn;
-    this.sessionSignFn = sessionSignFn;
-    this.adminSignFn = adminSignFn;
-    this.transactionSignFn = transactionSignFn;
-    this.sessionPubKey = sessionPubKey;
-    this.publicKey = publicKey;
-    this.connection =
-      connection ||
-      new Connection(nord.solanaUrl, {
-        commitment: "confirmed",
-      });
-
-    // Set sessionId if provided
-    if (sessionId !== undefined) {
-      this.sessionId = sessionId;
-    }
+    super({
+      nord,
+      address: parsedAddress,
+      walletSignFn,
+      sessionSignFn,
+      transactionSignFn,
+      connection,
+      sessionId,
+      sessionPubKey,
+      publicKey,
+    });
 
     // Convert tokens from info endpoint to SPLTokenInfo
     if (this.nord.tokens && this.nord.tokens.length > 0) {
@@ -394,9 +295,9 @@ export class NordUser {
       sessionSignFn: this.sessionSignFn,
       transactionSignFn: this.transactionSignFn,
       connection: this.connection,
-      sessionPubKey: this.sessionPubKey,
+      sessionPubKey: new Uint8Array(this.sessionPubKey),
       publicKey: this.publicKey,
-      adminSignFn: this.adminSignFn,
+      sessionId: this.sessionId,
     });
 
     // Copy other properties
@@ -404,12 +305,8 @@ export class NordUser {
     cloned.positions = { ...this.positions };
     cloned.margins = { ...this.margins };
     cloned.accountIds = this.accountIds ? [...this.accountIds] : undefined;
-    cloned.sessionId = this.sessionId;
-    cloned.publicKey = this.publicKey;
-    cloned.lastTs = this.lastTs;
-    cloned.lastNonce = this.lastNonce;
-    cloned.adminNonce = this.adminNonce;
     cloned.splTokenInfos = [...this.splTokenInfos];
+    this.cloneClientState(cloned);
 
     return cloned;
   }
@@ -625,45 +522,19 @@ export class NordUser {
    * @returns Nonce as number
    */
   getNonce(): number {
-    return ++this.lastNonce;
+    return this.nextActionNonce();
   }
 
-  private ensureAdminSigner(): (message: Uint8Array) => Promise<Uint8Array> {
-    if (!this.adminSignFn) {
-      throw new NordError("Admin credentials are not configured for this user");
-    }
-    return this.adminSignFn;
-  }
-
-  private nextAdminNonce(): number {
-    return ++this.adminNonce;
-  }
-
-  private async submitAdminAction(
+  private async submitSessionAction(
     kind: proto.Action["kind"],
   ): Promise<proto.Receipt> {
-    const adminSigner = this.ensureAdminSigner();
-    const currentTimestamp = await this.nord.getTimestamp();
-    const nonce = this.nextAdminNonce();
-    const action = createAction(currentTimestamp, nonce, kind);
-
-    try {
-      return await sendAction(
-        this.nord.webServerUrl,
-        async (message) => {
-          const signature = await adminSigner(message);
-          const signed = new Uint8Array(message.length + signature.length);
-          signed.set(message);
-          signed.set(signature, message.length);
-          return signed;
-        },
-        action,
-      );
-    } catch (error) {
-      throw new NordError(`Admin action ${kind.case} failed`, {
-        cause: error,
-      });
-    }
+    return this.submitSignedAction(kind, async (message) => {
+      const signature = await this.sessionSignFn(message);
+      const signed = new Uint8Array(message.length + signature.length);
+      signed.set(message);
+      signed.set(signature, message.length);
+      return signed;
+    });
   }
 
   /**
@@ -853,19 +724,21 @@ export class NordUser {
   }>): Promise<{ actionId: bigint }> {
     try {
       this.checkSessionValidity();
-      const { actionId } = await withdraw(
-        this.nord.webServerUrl,
-        this.sessionSignFn,
-        await this.nord.getTimestamp(),
-        this.getNonce(),
-        {
-          sizeDecimals: findToken(this.nord.tokens, tokenId).decimals,
-          sessionId: optExpect(this.sessionId, "No session"),
-          tokenId: tokenId,
-          amount,
-        },
-      );
-      return { actionId };
+      const token = findToken(this.nord.tokens, tokenId);
+      const scaledAmount = toScaledU64(amount, token.decimals);
+      if (scaledAmount <= 0n) {
+        throw new NordError("Withdraw amount must be positive");
+      }
+      const receipt = await this.submitSessionAction({
+        case: "withdraw",
+        value: create(proto.Action_WithdrawSchema, {
+          sessionId: BigInt(optExpect(this.sessionId, "No session")),
+          tokenId,
+          amount: scaledAmount,
+        }),
+      });
+      this.expectReceiptKind(receipt, "withdrawResult", "withdraw");
+      return { actionId: receipt.actionId };
     } catch (error) {
       throw new NordError(
         `Failed to withdraw ${amount} of token ID ${tokenId}`,
@@ -892,27 +765,48 @@ export class NordUser {
       if (!market) {
         throw new NordError(`Market with ID ${params.marketId} not found`);
       }
-
-      const result = await placeOrder(
-        this.nord.webServerUrl,
-        this.sessionSignFn,
-        await this.nord.getTimestamp(),
-        this.getNonce(),
-        {
-          sessionId: optExpect(this.sessionId, "No session"),
-          senderId: params.accountId,
-          sizeDecimals: market.sizeDecimals,
-          priceDecimals: market.priceDecimals,
-          marketId: params.marketId,
-          side: params.side,
-          fillMode: params.fillMode,
-          isReduceOnly: params.isReduceOnly,
-          size: params.size,
-          price: params.price,
-          quoteSize: params.quoteSize,
-        },
+      const sessionId = optExpect(this.sessionId, "No session");
+      const price = toScaledU64(params.price ?? 0, market.priceDecimals);
+      const size = toScaledU64(params.size ?? 0, market.sizeDecimals);
+      const scaledQuote = params.quoteSize
+        ? params.quoteSize.toWire(market.priceDecimals, market.sizeDecimals)
+        : undefined;
+      assert(
+        price > 0n || size > 0n || scaledQuote !== undefined,
+        "OrderLimit must include at least one of: size, price, or quoteSize",
       );
-      return result;
+
+      const receipt = await this.submitSessionAction({
+        case: "placeOrder",
+        value: create(proto.Action_PlaceOrderSchema, {
+          sessionId: BigInt(sessionId),
+          senderAccountId: params.accountId,
+          marketId: params.marketId,
+          side: params.side === Side.Bid ? proto.Side.BID : proto.Side.ASK,
+          fillMode: fillModeToProtoFillMode(params.fillMode),
+          isReduceOnly: params.isReduceOnly,
+          price,
+          size,
+          quoteSize:
+            scaledQuote === undefined
+              ? undefined
+              : create(proto.QuoteSizeSchema, {
+                  size: scaledQuote.size,
+                  price: scaledQuote.price,
+                }),
+          clientOrderId:
+            params.clientOrderId === undefined
+              ? undefined
+              : BigInt(params.clientOrderId),
+        }),
+      });
+      this.expectReceiptKind(receipt, "placeOrderResult", "place order");
+      const result = receipt.kind.value;
+      return {
+        actionId: receipt.actionId,
+        orderId: result.posted?.orderId,
+        fills: result.fills,
+      };
     } catch (error) {
       throw new NordError("Failed to place order", { cause: error });
     }
@@ -938,18 +832,20 @@ export class NordUser {
       providedAccountId != null ? providedAccountId : this.accountIds?.[0];
     try {
       this.checkSessionValidity();
-      const result = await cancelOrder(
-        this.nord.webServerUrl,
-        this.sessionSignFn,
-        await this.nord.getTimestamp(),
-        this.getNonce(),
-        {
-          sessionId: optExpect(this.sessionId, "No session"),
-          senderId: accountId,
-          orderId,
-        },
-      );
-      return result;
+      const receipt = await this.submitSessionAction({
+        case: "cancelOrderById",
+        value: create(proto.Action_CancelOrderByIdSchema, {
+          orderId: BigInt(orderId),
+          sessionId: BigInt(optExpect(this.sessionId, "No session")),
+          senderAccountId: accountId,
+        }),
+      });
+      this.expectReceiptKind(receipt, "cancelOrderResult", "cancel order");
+      return {
+        actionId: receipt.actionId,
+        orderId: receipt.kind.value.orderId,
+        accountId: receipt.kind.value.accountId,
+      };
     } catch (error) {
       throw new NordError(`Failed to cancel order ${orderId}`, {
         cause: error,
@@ -971,23 +867,41 @@ export class NordUser {
       if (!market) {
         throw new NordError(`Market with ID ${params.marketId} not found`);
       }
-      const result = await addTrigger(
-        this.nord.webServerUrl,
-        this.sessionSignFn,
-        await this.nord.getTimestamp(),
-        this.getNonce(),
-        {
-          sessionId: optExpect(this.sessionId, "No session"),
-          marketId: params.marketId,
-          side: params.side,
-          kind: params.kind,
-          priceDecimals: market.priceDecimals,
-          triggerPrice: params.triggerPrice,
-          limitPrice: params.limitPrice,
-          accountId: params.accountId,
-        },
+      const triggerPrice = toScaledU64(
+        params.triggerPrice,
+        market.priceDecimals,
       );
-      return result;
+      assert(triggerPrice > 0n, "Trigger price must be positive");
+      const limitPrice =
+        params.limitPrice === undefined
+          ? undefined
+          : toScaledU64(params.limitPrice, market.priceDecimals);
+      if (limitPrice !== undefined) {
+        assert(limitPrice > 0n, "Limit price must be positive");
+      }
+      const key = create(proto.TriggerKeySchema, {
+        kind:
+          params.kind === TriggerKind.StopLoss
+            ? proto.TriggerKind.STOP_LOSS
+            : proto.TriggerKind.TAKE_PROFIT,
+        side: params.side === Side.Bid ? proto.Side.BID : proto.Side.ASK,
+      });
+      const prices = create(proto.Action_TriggerPricesSchema, {
+        triggerPrice,
+        limitPrice,
+      });
+      const receipt = await this.submitSessionAction({
+        case: "addTrigger",
+        value: create(proto.Action_AddTriggerSchema, {
+          sessionId: BigInt(optExpect(this.sessionId, "No session")),
+          marketId: params.marketId,
+          key,
+          prices,
+          accountId: params.accountId,
+        }),
+      });
+      this.expectReceiptKind(receipt, "triggerAdded", "add trigger");
+      return { actionId: receipt.actionId };
     } catch (error) {
       throw new NordError("Failed to add trigger", { cause: error });
     }
@@ -1009,324 +923,26 @@ export class NordUser {
       if (!market) {
         throw new NordError(`Market with ID ${params.marketId} not found`);
       }
-      const result = await removeTrigger(
-        this.nord.webServerUrl,
-        this.sessionSignFn,
-        await this.nord.getTimestamp(),
-        this.getNonce(),
-        {
-          sessionId: optExpect(this.sessionId, "No session"),
+      const key = create(proto.TriggerKeySchema, {
+        kind:
+          params.kind === TriggerKind.StopLoss
+            ? proto.TriggerKind.STOP_LOSS
+            : proto.TriggerKind.TAKE_PROFIT,
+        side: params.side === Side.Bid ? proto.Side.BID : proto.Side.ASK,
+      });
+      const receipt = await this.submitSessionAction({
+        case: "removeTrigger",
+        value: create(proto.Action_RemoveTriggerSchema, {
+          sessionId: BigInt(optExpect(this.sessionId, "No session")),
           marketId: params.marketId,
-          side: params.side,
-          kind: params.kind,
+          key,
           accountId: params.accountId,
-        },
-      );
-      return result;
+        }),
+      });
+      this.expectReceiptKind(receipt, "triggerRemoved", "remove trigger");
+      return { actionId: receipt.actionId };
     } catch (error) {
       throw new NordError("Failed to remove trigger", { cause: error });
-    }
-  }
-
-  /**
-   * Create a new token using admin privileges.
-   *
-   * @param params - Token configuration parameters
-   * @returns Receipt payload with the registered token metadata
-   * @throws {NordError} If the operation fails
-   */
-  async createToken(
-    params: CreateTokenParams,
-  ): Promise<{ actionId: bigint } & proto.Receipt_InsertTokenResult> {
-    try {
-      checkPubKeyLength(KeyType.Ed25519, params.solAddr.length);
-      const receipt = await this.submitAdminAction({
-        case: "createToken",
-        value: create(proto.Action_CreateTokenSchema, {
-          tokenDecimals: params.tokenDecimals,
-          weightBps: params.weightBps,
-          viewSymbol: params.viewSymbol,
-          oracleSymbol: params.oracleSymbol,
-          solAddr: params.solAddr,
-        }),
-      });
-      if (receipt.kind?.case !== "insertTokenResult") {
-        const label =
-          receipt.kind?.case === "err"
-            ? (proto.Error[receipt.kind.value] ?? receipt.kind.value.toString())
-            : (receipt.kind?.case ?? "unknown");
-        throw new NordError(`Failed to create token: ${label}`);
-      }
-      return { actionId: receipt.actionId, ...receipt.kind.value };
-    } catch (error) {
-      throw new NordError("Failed to create token", { cause: error });
-    }
-  }
-
-  /**
-   * Create a new market using admin privileges.
-   *
-   * @param params - Market configuration parameters
-   * @returns Receipt payload with the created market metadata
-   * @throws {NordError} If the operation fails
-   */
-  async createMarket(
-    params: CreateMarketParams,
-  ): Promise<{ actionId: bigint } & proto.Receipt_InsertMarketResult> {
-    try {
-      const receipt = await this.submitAdminAction({
-        case: "createMarket",
-        value: create(proto.Action_CreateMarketSchema, {
-          sizeDecimals: params.sizeDecimals,
-          priceDecimals: params.priceDecimals,
-          imfBps: params.imfBps,
-          cmfBps: params.cmfBps,
-          mmfBps: params.mmfBps,
-          marketType: params.marketType,
-          viewSymbol: params.viewSymbol,
-          oracleSymbol: params.oracleSymbol,
-          baseTokenId: params.baseTokenId,
-        }),
-      });
-      if (receipt.kind?.case !== "insertMarketResult") {
-        const label =
-          receipt.kind?.case === "err"
-            ? (proto.Error[receipt.kind.value] ?? receipt.kind.value.toString())
-            : (receipt.kind?.case ?? "unknown");
-        throw new NordError(`Failed to create market: ${label}`);
-      }
-      return { actionId: receipt.actionId, ...receipt.kind.value };
-    } catch (error) {
-      throw new NordError("Failed to create market", { cause: error });
-    }
-  }
-
-  /**
-   * Update the Pyth wormhole guardian set.
-   *
-   * @param params - Guardian set index and guardian addresses
-   * @returns Receipt payload describing the applied guardian update
-   * @throws {NordError} If the operation fails
-   */
-  async pythSetWormholeGuardians(
-    params: PythSetWormholeGuardiansParams,
-  ): Promise<{ actionId: bigint } & proto.Receipt_UpdateGuardianSetResult> {
-    try {
-      const receipt = await this.submitAdminAction({
-        case: "pythSetWormholeGuardians",
-        value: create(proto.Action_PythSetWormholeGuardiansSchema, {
-          guardianSetIndex: params.guardianSetIndex,
-          addresses: params.addresses,
-        }),
-      });
-      if (receipt.kind?.case !== "updateGuardianSetResult") {
-        const label =
-          receipt.kind?.case === "err"
-            ? (proto.Error[receipt.kind.value] ?? receipt.kind.value.toString())
-            : (receipt.kind?.case ?? "unknown");
-        throw new NordError(`Failed to update wormhole guardians: ${label}`);
-      }
-      return { actionId: receipt.actionId, ...receipt.kind.value };
-    } catch (error) {
-      throw new NordError("Failed to update wormhole guardians", {
-        cause: error,
-      });
-    }
-  }
-
-  /**
-   * Bind a Pyth price feed to an oracle symbol.
-   *
-   * @param params - Oracle symbol and corresponding feed identifier
-   * @returns Receipt payload describing the applied symbol-feed binding
-   * @throws {NordError} If the operation fails
-   */
-  async pythSetSymbolFeed(
-    params: PythSetSymbolFeedParams,
-  ): Promise<{ actionId: bigint } & proto.Receipt_OracleSymbolFeedResult> {
-    try {
-      const receipt = await this.submitAdminAction({
-        case: "pythSetSymbolFeed",
-        value: create(proto.Action_PythSetSymbolFeedSchema, {
-          oracleSymbol: params.oracleSymbol,
-          priceFeedId: params.priceFeedId,
-        }),
-      });
-      if (receipt.kind?.case !== "oracleSymbolFeedResult") {
-        const label =
-          receipt.kind?.case === "err"
-            ? (proto.Error[receipt.kind.value] ?? receipt.kind.value.toString())
-            : (receipt.kind?.case ?? "unknown");
-        throw new NordError(`Failed to set symbol feed: ${label}`);
-      }
-      return { actionId: receipt.actionId, ...receipt.kind.value };
-    } catch (error) {
-      throw new NordError("Failed to set symbol feed", { cause: error });
-    }
-  }
-
-  /**
-   * Pause the engine via admin privileges.
-   *
-   * @returns Receipt confirming that the engine entered maintenance mode
-   * @throws {NordError} If the operation fails
-   */
-  async pause(): Promise<{ actionId: bigint }> {
-    try {
-      const receipt = await this.submitAdminAction({
-        case: "pause",
-        value: create(proto.Action_PauseSchema, {}),
-      });
-      if (receipt.kind?.case !== "paused") {
-        const label =
-          receipt.kind?.case === "err"
-            ? (proto.Error[receipt.kind.value] ?? receipt.kind.value.toString())
-            : (receipt.kind?.case ?? "unknown");
-        throw new NordError(`Failed to pause: ${label}`);
-      }
-      return { actionId: receipt.actionId };
-    } catch (error) {
-      throw new NordError("Failed to pause", { cause: error });
-    }
-  }
-
-  /**
-   * Unpause the engine via admin privileges.
-   *
-   * @returns Receipt confirming that the engine resumed processing
-   * @throws {NordError} If the operation fails
-   */
-  async unpause(): Promise<{ actionId: bigint }> {
-    try {
-      const receipt = await this.submitAdminAction({
-        case: "unpause",
-        value: create(proto.Action_UnpauseSchema, {}),
-      });
-      if (receipt.kind?.case !== "unpaused") {
-        const label =
-          receipt.kind?.case === "err"
-            ? (proto.Error[receipt.kind.value] ?? receipt.kind.value.toString())
-            : (receipt.kind?.case ?? "unknown");
-        throw new NordError(`Failed to unpause: ${label}`);
-      }
-      return { actionId: receipt.actionId };
-    } catch (error) {
-      throw new NordError("Failed to unpause", { cause: error });
-    }
-  }
-
-  /**
-   * Freeze trading on a market.
-   *
-   * @param params - Identifier of the market to freeze
-   * @returns Receipt payload confirming the freeze state
-   * @throws {NordError} If the operation fails
-   */
-  async freezeMarket(
-    params: FreezeMarketParams,
-  ): Promise<{ actionId: bigint } & proto.Receipt_MarketFreezeUpdated> {
-    try {
-      const receipt = await this.submitAdminAction({
-        case: "freezeMarket",
-        value: create(proto.Action_FreezeMarketSchema, {
-          marketId: params.marketId,
-        }),
-      });
-      if (receipt.kind?.case !== "marketFreezeUpdated") {
-        const label =
-          receipt.kind?.case === "err"
-            ? (proto.Error[receipt.kind.value] ?? receipt.kind.value.toString())
-            : (receipt.kind?.case ?? "unknown");
-        throw new NordError(`Failed to freeze market: ${label}`);
-      }
-      return { actionId: receipt.actionId, ...receipt.kind.value };
-    } catch (error) {
-      throw new NordError("Failed to freeze market", { cause: error });
-    }
-  }
-
-  /**
-   * Unfreeze trading on a market.
-   *
-   * @param params - Identifier of the market to unfreeze
-   * @returns Receipt payload confirming the freeze state
-   * @throws {NordError} If the operation fails
-   */
-  async unfreezeMarket(
-    params: UnfreezeMarketParams,
-  ): Promise<{ actionId: bigint } & proto.Receipt_MarketFreezeUpdated> {
-    try {
-      const receipt = await this.submitAdminAction({
-        case: "unfreezeMarket",
-        value: create(proto.Action_UnfreezeMarketSchema, {
-          marketId: params.marketId,
-        }),
-      });
-      if (receipt.kind?.case !== "marketFreezeUpdated") {
-        const label =
-          receipt.kind?.case === "err"
-            ? (proto.Error[receipt.kind.value] ?? receipt.kind.value.toString())
-            : (receipt.kind?.case ?? "unknown");
-        throw new NordError(`Failed to unfreeze market: ${label}`);
-      }
-      return { actionId: receipt.actionId, ...receipt.kind.value };
-    } catch (error) {
-      throw new NordError("Failed to unfreeze market", { cause: error });
-    }
-  }
-
-  /**
-   * Fetch active triggers for an account.
-   *
-   * @param params Optional parameters containing an explicit account id.
-   * @throws {NordError} If no account can be resolved or the request fails.
-   */
-  async getAccountTriggers(params?: {
-    accountId?: number;
-  }): Promise<AccountTriggerInfo[]> {
-    const accountId = params?.accountId ?? this.accountIds?.[0];
-
-    if (accountId == null) {
-      throw new NordError(
-        "Account ID is undefined. Make sure to call updateAccountId() before requesting triggers.",
-      );
-    }
-
-    try {
-      return await fetchAccountTriggers(this.nord.webServerUrl, accountId);
-    } catch (error) {
-      throw new NordError("Failed to fetch account triggers", { cause: error });
-    }
-  }
-
-  /**
-   * Fetch trigger history for an account.
-   *
-   * @param params Optional parameters with account id and history query filters.
-   * @throws {NordError} If no account can be resolved or the request fails.
-   */
-  async getAccountTriggerHistory(
-    params: HistoryTriggerQuery & { accountId?: number },
-  ): Promise<TriggerHistoryPage> {
-    const { accountId: providedAccountId, ...query } = params;
-    const accountId = providedAccountId ?? this.accountIds?.[0];
-
-    if (accountId == null) {
-      throw new NordError(
-        "Account ID is undefined. Make sure to call updateAccountId() before requesting trigger history.",
-      );
-    }
-
-    try {
-      return await fetchAccountTriggerHistory(
-        this.nord.webServerUrl,
-        accountId,
-        query,
-      );
-    } catch (error) {
-      throw new NordError("Failed to fetch account trigger history", {
-        cause: error,
-      });
     }
   }
 
@@ -1341,20 +957,22 @@ export class NordUser {
       this.checkSessionValidity();
       const token = findToken(this.nord.tokens, params.tokenId);
 
-      await transfer(
-        this.nord.webServerUrl,
-        this.sessionSignFn,
-        await this.nord.getTimestamp(),
-        this.getNonce(),
-        {
-          sessionId: optExpect(this.sessionId, "No session"),
+      const amount = toScaledU64(params.amount, token.decimals);
+      if (amount <= 0n) {
+        throw new NordError("Transfer amount must be positive");
+      }
+
+      const receipt = await this.submitSessionAction({
+        case: "transfer",
+        value: create(proto.Action_TransferSchema, {
+          sessionId: BigInt(optExpect(this.sessionId, "No session")),
           fromAccountId: optExpect(params.fromAccountId, "No source account"),
           toAccountId: optExpect(params.toAccountId, "No target account"),
           tokenId: params.tokenId,
-          tokenDecimals: token.decimals,
-          amount: params.amount,
-        },
-      );
+          amount,
+        }),
+      });
+      this.expectReceiptKind(receipt, "transferred", "transfer tokens");
     } catch (error) {
       throw new NordError("Failed to transfer tokens", { cause: error });
     }
@@ -1588,14 +1206,5 @@ export class NordUser {
         cause: error,
       });
     }
-  }
-
-  /**
-   * Get the Solana public key derived from the address
-   *
-   * @returns The Solana public key
-   */
-  getSolanaPublicKey(): PublicKey {
-    return this.address;
   }
 }

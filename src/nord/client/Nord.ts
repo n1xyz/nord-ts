@@ -21,6 +21,9 @@ import {
   Token,
   TradesResponse,
   User,
+  AccountTriggerInfo,
+  HistoryTriggerQuery,
+  TriggerHistoryPage,
 } from "../../types";
 import * as utils from "../../utils";
 import { NordWebSocketClient } from "../../websocket/index";
@@ -680,5 +683,71 @@ export class Nord {
    */
   public async accountExists(pubkey: string | PublicKey): Promise<boolean> {
     return !!(await this.getUser({ pubkey }));
+  }
+
+  /**
+   * Fetch active triggers for an account.
+   *
+   * @param params Optional parameters containing an explicit account id.
+   * @throws {NordError} If no account can be resolved or the request fails.
+   */
+  async getAccountTriggers(params?: {
+    accountId?: number;
+  }): Promise<AccountTriggerInfo[]> {
+    const accountId = params?.accountId;
+
+    if (accountId == null) {
+      throw new NordError(
+        "Account ID is undefined. Make sure to call updateAccountId() before requesting triggers.",
+      );
+    }
+
+    try {
+      const triggers = await this.GET("/account/{account_id}/triggers", {
+        params: {
+          path: { account_id: accountId },
+        },
+      });
+      return triggers ?? [];
+    } catch (error) {
+      throw new NordError("Failed to fetch account triggers", { cause: error });
+    }
+  }
+
+  /**
+   * Fetch trigger history for an account.
+   *
+   * @param params Optional parameters with account id and history query filters.
+   * @throws {NordError} If no account can be resolved or the request fails.
+   */
+  async getAccountTriggerHistory(
+    params: HistoryTriggerQuery & { accountId?: number },
+  ): Promise<TriggerHistoryPage> {
+    const accountId = params?.accountId;
+
+    if (accountId == null) {
+      throw new NordError(
+        "Account ID is undefined. Make sure to call updateAccountId() before requesting trigger history.",
+      );
+    }
+
+    const { accountId: _, ...query } = params;
+    try {
+      return await this.GET("/account/{account_id}/triggers/history", {
+        params: {
+          path: { account_id: accountId },
+          query: {
+            since: query.since,
+            until: query.until,
+            pageSize: query.pageSize,
+            startInclusive: query.startInclusive,
+          },
+        },
+      });
+    } catch (error) {
+      throw new NordError("Failed to fetch account trigger history", {
+        cause: error,
+      });
+    }
   }
 }

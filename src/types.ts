@@ -92,6 +92,10 @@ export type AccountPnlQuery = components["schemas"]["AccountPnlQuery"];
 export type AccountPnl = components["schemas"]["AccountPnl"];
 export type AccountPnlPage =
   components["schemas"]["PageResult_for_uint64_and_AccountPnl"];
+export type AccountTriggerInfo = components["schemas"]["AccountTriggerInfo"];
+export type TriggerHistoryPage =
+  components["schemas"]["PageResult_for_uint64_and_HistoryTriggerInfo"];
+export type HistoryTriggerQuery = components["schemas"]["AccountTriggersQuery"];
 
 /**
  * Configuration options for the Nord client
