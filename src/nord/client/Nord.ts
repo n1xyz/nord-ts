@@ -238,7 +238,7 @@ export class Nord {
     const connection = new Connection(solanaUrl, { commitment: "confirmed" });
     const protonClient = await ProtonClient.init({
       protonUrl: webServerUrl,
-      app: new PublicKey(app),
+      bridgeVk: new PublicKey(app),
       solConn: connection,
     });
     const nord = new Nord({
