@@ -12,6 +12,7 @@ import fetch from "node-fetch";
 import { RequestInfo, RequestInit, Response } from "node-fetch";
 import { Keypair } from "@solana/web3.js";
 import bs58 from "bs58";
+import { NordError } from "./nord/utils/NordError";
 
 export const SESSION_TTL: bigint = 60n * 60n * 24n * 30n;
 export const ZERO_DECIMAL = new Decimal(0);
@@ -231,6 +232,20 @@ export function checkPubKeyLength(keyType: KeyType, len: number): void {
   if (len !== 33 && keyType === KeyType.Secp256k1) {
     throw new Error("Secp256k1 pubkeys must be 33 length.");
   }
+}
+
+export function decodeHex(value: string, errorMessage: string): Uint8Array {
+  const hex = value.startsWith("0x") ? value.slice(2) : value;
+  let decoded: Uint8Array;
+  try {
+    decoded = Uint8Array.from(Buffer.from(hex, "hex"));
+  } catch {
+    throw new NordError(errorMessage);
+  }
+  if (decoded.length === 0) {
+    throw new NordError(errorMessage);
+  }
+  return decoded;
 }
 
 export function findMarket(markets: Market[], marketId: number): Market {

@@ -1,6 +1,6 @@
 import * as proto from "../../gen/nord_pb";
 import { create } from "@bufbuild/protobuf";
-import { checkPubKeyLength } from "../../utils";
+import { checkPubKeyLength, decodeHex } from "../../utils";
 import { KeyType } from "../../types";
 import { NordError } from "../utils/NordError";
 import { NordClient } from "./NordClient";
@@ -39,7 +39,7 @@ export interface CreateMarketParams {
  */
 export interface PythSetWormholeGuardiansParams {
   guardianSetIndex: number;
-  addresses: Uint8Array[];
+  addresses: string[];
 }
 
 /**
@@ -47,7 +47,7 @@ export interface PythSetWormholeGuardiansParams {
  */
 export interface PythSetSymbolFeedParams {
   oracleSymbol: string;
-  priceFeedId: Uint8Array;
+  priceFeedId: string;
 }
 
 /**
@@ -226,11 +226,15 @@ export class NordAdmin extends NordClient {
   async pythSetWormholeGuardians(
     params: PythSetWormholeGuardiansParams,
   ): Promise<{ actionId: bigint } & proto.Receipt_UpdateGuardianSetResult> {
+    const addresses = params.addresses.map((address) =>
+      decodeHex(address, "Invalid guardian address"),
+    );
+
     const receipt = await this.submitAction({
       case: "pythSetWormholeGuardians",
       value: create(proto.Action_PythSetWormholeGuardiansSchema, {
         guardianSetIndex: params.guardianSetIndex,
-        addresses: params.addresses,
+        addresses,
       }),
     });
     this.expectReceiptKind(
@@ -251,11 +255,13 @@ export class NordAdmin extends NordClient {
   async pythSetSymbolFeed(
     params: PythSetSymbolFeedParams,
   ): Promise<{ actionId: bigint } & proto.Receipt_OracleSymbolFeedResult> {
+    const priceFeedId = decodeHex(params.priceFeedId, "Invalid price feed id");
+
     const receipt = await this.submitAction({
       case: "pythSetSymbolFeed",
       value: create(proto.Action_PythSetSymbolFeedSchema, {
         oracleSymbol: params.oracleSymbol,
-        priceFeedId: params.priceFeedId,
+        priceFeedId,
       }),
     });
     this.expectReceiptKind(
