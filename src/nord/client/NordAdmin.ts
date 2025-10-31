@@ -8,6 +8,9 @@ import type { NordClientParams } from "./NordClient";
 import type { NordUser } from "./NordUser";
 import { FeeTierConfig } from "../../gen/nord_pb";
 
+/**
+ * Parameters required to register a new token via the admin API.
+ */
 export interface CreateTokenParams {
   tokenDecimals: number;
   weightBps: number;
@@ -16,6 +19,9 @@ export interface CreateTokenParams {
   solAddr: Uint8Array;
 }
 
+/**
+ * Parameters used when creating a new market.
+ */
 export interface CreateMarketParams {
   sizeDecimals: number;
   priceDecimals: number;
@@ -28,20 +34,32 @@ export interface CreateMarketParams {
   baseTokenId: number;
 }
 
+/**
+ * Configuration for updating the Wormhole guardian set on the oracle.
+ */
 export interface PythSetWormholeGuardiansParams {
   guardianSetIndex: number;
   addresses: Uint8Array[];
 }
 
+/**
+ * Parameters required to link an oracle symbol to a Pyth price feed.
+ */
 export interface PythSetSymbolFeedParams {
   oracleSymbol: string;
   priceFeedId: Uint8Array;
 }
 
+/**
+ * Identifies a market that should be frozen.
+ */
 export interface FreezeMarketParams {
   marketId: number;
 }
 
+/**
+ * Identifies a market that should be unfrozen.
+ */
 export interface UnfreezeMarketParams {
   marketId: number;
 }
@@ -50,15 +68,24 @@ export interface NordAdminParams extends NordClientParams {
   signFn: (message: Uint8Array) => Promise<Uint8Array>;
 }
 
+/**
+ * Parameters for adding a new fee tier.
+ */
 export interface AddFeeTierParams {
   config: FeeTierConfig;
 }
 
+/**
+ * Parameters for updating an existing fee tier.
+ */
 export interface UpdateFeeTierParams {
   tierId: number;
   config: FeeTierConfig;
 }
 
+/**
+ * Administrative client capable of submitting privileged configuration actions.
+ */
 export class NordAdmin extends NordClient {
   private readonly signFn: (message: Uint8Array) => Promise<Uint8Array>;
 
@@ -68,6 +95,9 @@ export class NordAdmin extends NordClient {
     this.signFn = adminSignFn;
   }
 
+  /**
+   * Create a deep copy of this admin client, preserving session state.
+   */
   clone(): NordAdmin {
     const copy = new NordAdmin({
       nord: this.nord,
@@ -85,6 +115,12 @@ export class NordAdmin extends NordClient {
     return copy;
   }
 
+  /**
+   * Promote a `NordUser` session to an admin-capable client.
+   *
+   * @param user - Existing authenticated user session
+   * @param adminSignFn - Signature provider for admin actions
+   */
   static fromUser(
     user: NordUser,
     adminSignFn: (message: Uint8Array) => Promise<Uint8Array>,
@@ -103,6 +139,12 @@ export class NordAdmin extends NordClient {
     });
   }
 
+  /**
+   * Submit an action and append the admin signature before sending it to Nord.
+   *
+   * @param kind - Action payload describing the admin request
+   * @throws {NordError} If signing or submission fails
+   */
   private async submitAction(
     kind: proto.Action["kind"],
   ): Promise<proto.Receipt> {
@@ -121,6 +163,13 @@ export class NordAdmin extends NordClient {
     }
   }
 
+  /**
+   * Register a new token that can be listed on Nord.
+   *
+   * @param params - Token configuration values
+   * @returns Action identifier and resulting token metadata
+   * @throws {NordError} If the action submission fails
+   */
   async createToken(
     params: CreateTokenParams,
   ): Promise<{ actionId: bigint } & proto.Receipt_InsertTokenResult> {
@@ -139,6 +188,13 @@ export class NordAdmin extends NordClient {
     return { actionId: receipt.actionId, ...receipt.kind.value };
   }
 
+  /**
+   * Open a new market with the provided trading parameters.
+   *
+   * @param params - Market configuration to apply
+   * @returns Action identifier and resulting market metadata
+   * @throws {NordError} If the action submission fails
+   */
   async createMarket(
     params: CreateMarketParams,
   ): Promise<{ actionId: bigint } & proto.Receipt_InsertMarketResult> {
@@ -160,6 +216,13 @@ export class NordAdmin extends NordClient {
     return { actionId: receipt.actionId, ...receipt.kind.value };
   }
 
+  /**
+   * Update the Pyth guardian set used for verifying Wormhole messages.
+   *
+   * @param params - Guardian set index and guardian addresses
+   * @returns Action identifier and guardian update receipt
+   * @throws {NordError} If the action submission fails
+   */
   async pythSetWormholeGuardians(
     params: PythSetWormholeGuardiansParams,
   ): Promise<{ actionId: bigint } & proto.Receipt_UpdateGuardianSetResult> {
@@ -178,6 +241,13 @@ export class NordAdmin extends NordClient {
     return { actionId: receipt.actionId, ...receipt.kind.value };
   }
 
+  /**
+   * Link an oracle symbol to a specific Pyth price feed.
+   *
+   * @param params - Oracle symbol and price feed identifier
+   * @returns Action identifier and symbol feed receipt
+   * @throws {NordError} If the action submission fails
+   */
   async pythSetSymbolFeed(
     params: PythSetSymbolFeedParams,
   ): Promise<{ actionId: bigint } & proto.Receipt_OracleSymbolFeedResult> {
@@ -196,6 +266,12 @@ export class NordAdmin extends NordClient {
     return { actionId: receipt.actionId, ...receipt.kind.value };
   }
 
+  /**
+   * Pause all trading activity on the exchange.
+   *
+   * @returns Action identifier confirming the pause
+   * @throws {NordError} If the action submission fails
+   */
   async pause(): Promise<{ actionId: bigint }> {
     const receipt = await this.submitAction({
       case: "pause",
@@ -205,6 +281,12 @@ export class NordAdmin extends NordClient {
     return { actionId: receipt.actionId };
   }
 
+  /**
+   * Resume trading activity after a pause.
+   *
+   * @returns Action identifier confirming the unpause
+   * @throws {NordError} If the action submission fails
+   */
   async unpause(): Promise<{ actionId: bigint }> {
     const receipt = await this.submitAction({
       case: "unpause",
@@ -214,6 +296,13 @@ export class NordAdmin extends NordClient {
     return { actionId: receipt.actionId };
   }
 
+  /**
+   * Freeze an individual market, preventing new trades and orders.
+   *
+   * @param params - Target market identifier
+   * @returns Action identifier and freeze receipt
+   * @throws {NordError} If the action submission fails
+   */
   async freezeMarket(
     params: FreezeMarketParams,
   ): Promise<{ actionId: bigint } & proto.Receipt_MarketFreezeUpdated> {
@@ -227,6 +316,13 @@ export class NordAdmin extends NordClient {
     return { actionId: receipt.actionId, ...receipt.kind.value };
   }
 
+  /**
+   * Unfreeze a market that was previously halted.
+   *
+   * @param params - Target market identifier
+   * @returns Action identifier and freeze receipt
+   * @throws {NordError} If the action submission fails
+   */
   async unfreezeMarket(
     params: UnfreezeMarketParams,
   ): Promise<{ actionId: bigint } & proto.Receipt_MarketFreezeUpdated> {
@@ -240,6 +336,13 @@ export class NordAdmin extends NordClient {
     return { actionId: receipt.actionId, ...receipt.kind.value };
   }
 
+  /**
+   * Append a new fee tier to the account bracket configuration.
+   *
+   * @param params - Fee tier configuration to insert
+   * @returns Action identifier and fee tier addition receipt
+   * @throws {NordError} If the action submission fails
+   */
   async addFeeTier(
     params: AddFeeTierParams,
   ): Promise<{ actionId: bigint } & proto.Receipt_FeeTierAdded> {
@@ -253,6 +356,13 @@ export class NordAdmin extends NordClient {
     return { actionId: receipt.actionId, ...receipt.kind.value };
   }
 
+  /**
+   * Update an existing fee tier with new maker/taker rates.
+   *
+   * @param params - Fee tier identifier and updated configuration
+   * @returns Action identifier and fee tier update receipt
+   * @throws {NordError} If the action submission fails
+   */
   async updateFeeTier(
     params: UpdateFeeTierParams,
   ): Promise<{ actionId: bigint } & proto.Receipt_FeeTierUpdated> {
@@ -267,6 +377,14 @@ export class NordAdmin extends NordClient {
     return { actionId: receipt.actionId, ...receipt.kind.value };
   }
 
+  /**
+   * Assign a fee tier to a set of account identifiers.
+   *
+   * @param accounts - Account IDs to update
+   * @param tierId - Target fee tier identifier
+   * @returns Action identifier and accounts-tier receipt
+   * @throws {NordError} If the action submission fails
+   */
   async updateAccountsTier(
     accounts: number[],
     tierId: number,
