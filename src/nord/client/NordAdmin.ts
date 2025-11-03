@@ -219,6 +219,10 @@ export class NordAdmin extends NordClient {
   /**
    * Update the Pyth guardian set used for verifying Wormhole messages.
    *
+   * Each address must decode from a 20-byte hex string (with or without a
+   * leading `0x` prefix). The engine validates the supplied guardian set index
+   * before applying the update.
+   *
    * @param params - Guardian set index and guardian addresses
    * @returns Action identifier and guardian update receipt
    * @throws {NordError} If the action submission fails
@@ -247,6 +251,10 @@ export class NordAdmin extends NordClient {
 
   /**
    * Link an oracle symbol to a specific Pyth price feed.
+   *
+   * The price feed identifier must decode to 32 bytes (with or without a
+   * leading `0x` prefix). Use this call to create or update the mapping used
+   * by the oracle integration.
    *
    * @param params - Oracle symbol and price feed identifier
    * @returns Action identifier and symbol feed receipt
@@ -345,9 +353,13 @@ export class NordAdmin extends NordClient {
   /**
    * Append a new fee tier to the account bracket configuration.
    *
+   * - The engine supports at most 16 tiers (ids 0–15). Tier 0 is reserved for
+   *   the default Nord fees; use `updateFeeTier` if you need to change it.
+   * - The first appended tier receives id 1, and subsequent tiers increment the id.
+   *
    * @param params - Fee tier configuration to insert
    * @returns Action identifier and fee tier addition receipt
-   * @throws {NordError} If the action submission fails
+   * @throws {NordError} If the action submission fails or the new tier exceeds the maximum range (0-15).
    */
   async addFeeTier(
     params: AddFeeTierParams,
@@ -365,9 +377,12 @@ export class NordAdmin extends NordClient {
   /**
    * Update an existing fee tier with new maker/taker rates.
    *
+   * Tier identifiers must already exist; attempting to update a missing tier
+   * causes the action to fail.
+   *
    * @param params - Fee tier identifier and updated configuration
    * @returns Action identifier and fee tier update receipt
-   * @throws {NordError} If the action submission fails
+   * @throws {NordError} If the action submission fails or the tier ID exceeds the configured range.
    */
   async updateFeeTier(
     params: UpdateFeeTierParams,
@@ -384,12 +399,16 @@ export class NordAdmin extends NordClient {
   }
 
   /**
-   * Assign a fee tier to a set of account identifiers.
+   * Assign a fee tier to one or more accounts.
+   *
+   * The tier id must be within the configured range (0–15). Every account starts
+   * on tier 0; assigning it to another tier requires that tier to exist already.
+   * Invalid account ids or tier ids cause the action to fail.
    *
    * @param accounts - Account IDs to update
    * @param tierId - Target fee tier identifier
    * @returns Action identifier and accounts-tier receipt
-   * @throws {NordError} If the action submission fails
+   * @throws {NordError} If the tier id exceeds the configured range or an account id is invalid.
    */
   async updateAccountsTier(
     accounts: number[],
