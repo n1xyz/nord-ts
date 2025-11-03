@@ -230,9 +230,20 @@ export class NordAdmin extends NordClient {
   async pythSetWormholeGuardians(
     params: PythSetWormholeGuardiansParams,
   ): Promise<{ actionId: bigint } & proto.Receipt_UpdateGuardianSetResult> {
-    const addresses = params.addresses.map((address) =>
-      decodeHex(address, "Invalid guardian address"),
-    );
+    const addresses = params.addresses.map((address) => {
+      try {
+        const decoded = decodeHex(address);
+        if (decoded.length !== 20) {
+          throw new Error("guardian address must be 20 bytes");
+        }
+        return decoded;
+      } catch (e) {
+        throw new NordError(
+          "invalid guardian address; must be a 20 byte hex address",
+          { cause: e },
+        );
+      }
+    });
 
     const receipt = await this.submitAction({
       case: "pythSetWormholeGuardians",
@@ -263,7 +274,17 @@ export class NordAdmin extends NordClient {
   async pythSetSymbolFeed(
     params: PythSetSymbolFeedParams,
   ): Promise<{ actionId: bigint } & proto.Receipt_OracleSymbolFeedResult> {
-    const priceFeedId = decodeHex(params.priceFeedId, "Invalid price feed id");
+    let priceFeedId: Uint8Array;
+    try {
+      priceFeedId = decodeHex(params.priceFeedId);
+      if (priceFeedId.length !== 32) {
+        throw new Error("price feed id must be 32 bytes");
+      }
+    } catch (e) {
+      throw new NordError("invalid price feed id; must be a 32 byte hex id", {
+        cause: e,
+      });
+    }
 
     const receipt = await this.submitAction({
       case: "pythSetSymbolFeed",

@@ -234,18 +234,9 @@ export function checkPubKeyLength(keyType: KeyType, len: number): void {
   }
 }
 
-export function decodeHex(value: string, errorMessage: string): Uint8Array {
+export function decodeHex(value: string): Uint8Array {
   const hex = value.startsWith("0x") ? value.slice(2) : value;
-  let decoded: Uint8Array;
-  try {
-    decoded = Uint8Array.from(Buffer.from(hex, "hex"));
-  } catch {
-    throw new NordError(errorMessage);
-  }
-  if (decoded.length === 0) {
-    throw new NordError(errorMessage);
-  }
-  return decoded;
+  return Uint8Array.from(Buffer.from(hex, "hex"));
 }
 
 export function findMarket(markets: Market[], marketId: number): Market {
