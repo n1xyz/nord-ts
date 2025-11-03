@@ -26,6 +26,11 @@ import {
   HistoryTriggerQuery,
   TriggerHistoryPage,
   FeeTierId,
+  PageResultStringOrderInfo,
+  PageResultStringTrade,
+  OrderInfoFromApi,
+  TokenStats,
+  FillRole,
 } from "../../types";
 import * as utils from "../../utils";
 import { NordWebSocketClient } from "../../websocket/index";
@@ -660,6 +665,59 @@ export class Nord {
   }
 
   /**
+   * Get the public key associated with an account id.
+   *
+   * @param accountId - Account id to query
+   * @returns Base58-encoded account public key
+   * @throws {NordError} If the request fails
+   */
+  public async getAccountPubkey(accountId: number): Promise<string> {
+    return await this.GET("/account/{account_id}/pubkey", {
+      params: {
+        path: { account_id: accountId },
+      },
+    });
+  }
+
+  /**
+   * Get the withdrawal fee charged for an account.
+   *
+   * @param accountId - Account id to query
+   * @returns Withdrawal fee quoted in quote token units
+   * @throws {NordError} If the request fails
+   */
+  public async getAccountWithdrawalFee(accountId: number): Promise<number> {
+    return await this.GET("/account/{account_id}/fees/withdrawal", {
+      params: {
+        path: { account_id: accountId },
+      },
+    });
+  }
+
+  /**
+   * Get open orders for an account.
+   *
+   * @param accountId - Account id to query
+   * @param query - Optional pagination parameters
+   * @returns Page of orders keyed by client order id
+   * @throws {NordError} If the request fails
+   */
+  public async getAccountOrders(
+    accountId: number,
+    query?: { startInclusive?: string | null; pageSize?: number | null },
+  ): Promise<PageResultStringOrderInfo> {
+    return await this.GET("/account/{account_id}/orders", {
+      params: {
+        path: { account_id: accountId },
+        query: {
+          startInclusive: query?.startInclusive,
+          pageSize: query?.pageSize,
+        },
+      },
+    });
+  }
+
+  /**
    * Get profit and loss history for an account
    *
    * @param accountId - Account ID to query
@@ -697,6 +755,86 @@ export class Nord {
     return await this.GET("/market/{market_id}/stats", {
       params: {
         path: { market_id: marketId },
+      },
+    });
+  }
+
+  /**
+   * Fetch the per-market fee quote for an account.
+   *
+   * @param params - Market id, fee kind, and account id to quote
+   * @returns Fee in quote token units (negative means fee is charged)
+   * @throws {NordError} If the request fails
+   */
+  public async getMarketFee({
+    marketId,
+    feeKind,
+    accountId,
+  }: {
+    marketId: number;
+    feeKind: FillRole;
+    accountId: number;
+  }): Promise<number> {
+    return await this.GET("/market/{market_id}/fees/{fee_kind}/{account_id}", {
+      params: {
+        path: {
+          market_id: marketId,
+          fee_kind: feeKind,
+          account_id: accountId,
+        },
+      },
+    });
+  }
+
+  /**
+   * Fetch token statistics such as index price and oracle metadata.
+   *
+   * @param tokenId - Token identifier
+   * @returns Token stats
+   * @throws {NordError} If the request fails
+   */
+  public async getTokenStats(tokenId: number): Promise<TokenStats> {
+    return await this.GET("/tokens/{token_id}/stats", {
+      params: {
+        path: { token_id: tokenId },
+      },
+    });
+  }
+
+  /**
+   * Get order summary by order id.
+   *
+   * @param orderId - Order identifier
+   * @returns Order information
+   * @throws {NordError} If the request fails
+   */
+  public async getOrder(orderId: string): Promise<OrderInfoFromApi> {
+    return await this.GET("/order/{order_id}", {
+      params: {
+        path: { order_id: orderId },
+      },
+    });
+  }
+
+  /**
+   * Get trade history for a specific order.
+   *
+   * @param orderId - Order identifier
+   * @param query - Optional pagination parameters
+   * @returns Page of trades associated with the order
+   * @throws {NordError} If the request fails
+   */
+  public async getOrderTrades(
+    orderId: string,
+    query?: { startInclusive?: string | null; pageSize?: number | null },
+  ): Promise<PageResultStringTrade> {
+    return await this.GET("/order/{order_id}/trades", {
+      params: {
+        path: { order_id: orderId },
+        query: {
+          startInclusive: query?.startInclusive,
+          pageSize: query?.pageSize,
+        },
       },
     });
   }
