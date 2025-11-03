@@ -2,14 +2,7 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import type { Transaction } from "@solana/web3.js";
 import * as proto from "../../gen/nord_pb";
 import { createAction, sendAction } from "../api/actions";
-import { NordError } from "../utils/NordError";
 import { Nord } from "./Nord";
-
-type ReceiptKind = NonNullable<proto.Receipt["kind"]>;
-type ExtractReceiptKind<K extends ReceiptKind["case"]> = Extract<
-  ReceiptKind,
-  { case: K }
->;
 
 export interface NordClientParams {
   nord: Nord;
@@ -82,24 +75,5 @@ export abstract class NordClient {
 
   getSolanaPublicKey(): PublicKey {
     return this.address;
-  }
-
-  protected expectReceiptKind<K extends ReceiptKind["case"]>(
-    receipt: proto.Receipt,
-    expected: K,
-    action: string,
-  ): asserts receipt is proto.Receipt & { kind: ExtractReceiptKind<K> } {
-    if (receipt.kind?.case !== expected) {
-      const label = this.formatReceiptError(receipt);
-      throw new NordError(`Failed to ${action}: ${label}`);
-    }
-  }
-
-  protected formatReceiptError(receipt: proto.Receipt): string {
-    if (receipt.kind?.case === "err") {
-      const err = receipt.kind.value;
-      return proto.Error[err] ?? err.toString();
-    }
-    return receipt.kind?.case ?? "unknown";
   }
 }

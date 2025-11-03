@@ -39,6 +39,7 @@ import {
   createSession,
   revokeSession,
   atomic,
+  expectReceiptKind,
   AtomicSubaction,
 } from "../api/actions";
 import { NordError } from "../utils/NordError";
@@ -737,7 +738,7 @@ export class NordUser extends NordClient {
           amount: scaledAmount,
         }),
       });
-      this.expectReceiptKind(receipt, "withdrawResult", "withdraw");
+      expectReceiptKind(receipt, "withdrawResult", "withdraw");
       return { actionId: receipt.actionId };
     } catch (error) {
       throw new NordError(
@@ -800,7 +801,7 @@ export class NordUser extends NordClient {
               : BigInt(params.clientOrderId),
         }),
       });
-      this.expectReceiptKind(receipt, "placeOrderResult", "place order");
+      expectReceiptKind(receipt, "placeOrderResult", "place order");
       const result = receipt.kind.value;
       return {
         actionId: receipt.actionId,
@@ -840,7 +841,7 @@ export class NordUser extends NordClient {
           senderAccountId: accountId,
         }),
       });
-      this.expectReceiptKind(receipt, "cancelOrderResult", "cancel order");
+      expectReceiptKind(receipt, "cancelOrderResult", "cancel order");
       return {
         actionId: receipt.actionId,
         orderId: receipt.kind.value.orderId,
@@ -900,7 +901,7 @@ export class NordUser extends NordClient {
           accountId: params.accountId,
         }),
       });
-      this.expectReceiptKind(receipt, "triggerAdded", "add trigger");
+      expectReceiptKind(receipt, "triggerAdded", "add trigger");
       return { actionId: receipt.actionId };
     } catch (error) {
       throw new NordError("Failed to add trigger", { cause: error });
@@ -939,7 +940,7 @@ export class NordUser extends NordClient {
           accountId: params.accountId,
         }),
       });
-      this.expectReceiptKind(receipt, "triggerRemoved", "remove trigger");
+      expectReceiptKind(receipt, "triggerRemoved", "remove trigger");
       return { actionId: receipt.actionId };
     } catch (error) {
       throw new NordError("Failed to remove trigger", { cause: error });
@@ -972,7 +973,7 @@ export class NordUser extends NordClient {
           amount,
         }),
       });
-      this.expectReceiptKind(receipt, "transferred", "transfer tokens");
+      expectReceiptKind(receipt, "transferred", "transfer tokens");
     } catch (error) {
       throw new NordError("Failed to transfer tokens", { cause: error });
     }

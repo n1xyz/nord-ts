@@ -1,11 +1,10 @@
-import * as proto from "../../gen/nord_pb";
 import { create } from "@bufbuild/protobuf";
-import { checkPubKeyLength, decodeHex } from "../../utils";
-import { KeyType } from "../../types";
+import { PublicKey } from "@solana/web3.js";
+import * as proto from "../../gen/nord_pb";
+import { decodeHex } from "../../utils";
+import { createAction, sendAction, expectReceiptKind } from "../api/actions";
 import { NordError } from "../utils/NordError";
-import { NordClient } from "./NordClient";
-import type { NordClientParams } from "./NordClient";
-import type { NordUser } from "./NordUser";
+import { Nord } from "./Nord";
 import { FeeTierConfig } from "../../gen/nord_pb";
 
 /**
@@ -16,7 +15,7 @@ export interface CreateTokenParams {
   weightBps: number;
   viewSymbol: string;
   oracleSymbol: string;
-  solAddr: Uint8Array;
+  mintAddr: PublicKey;
 }
 
 /**
@@ -64,10 +63,6 @@ export interface UnfreezeMarketParams {
   marketId: number;
 }
 
-export interface NordAdminParams extends NordClientParams {
-  signFn: (message: Uint8Array) => Promise<Uint8Array>;
-}
-
 /**
  * Parameters for adding a new fee tier.
  */
@@ -86,56 +81,53 @@ export interface UpdateFeeTierParams {
 /**
  * Administrative client capable of submitting privileged configuration actions.
  */
-export class NordAdmin extends NordClient {
-  private readonly signFn: (message: Uint8Array) => Promise<Uint8Array>;
+export class NordAdmin {
+  private readonly nord: Nord;
+  private readonly signFn: (x: Uint8Array) => Promise<Uint8Array>;
 
-  constructor(params: NordAdminParams) {
-    const { signFn: adminSignFn, ...clientParams } = params;
-    super(clientParams);
-    this.signFn = adminSignFn;
+  private constructor({
+    nord,
+    signFn,
+  }: {
+    nord: Nord;
+    signFn: (x: Uint8Array) => Promise<Uint8Array>;
+  }) {
+    this.nord = nord;
+    this.signFn = signFn;
   }
 
-  /**
-   * Create a deep copy of this admin client, preserving session state.
-   */
-  clone(): NordAdmin {
-    const copy = new NordAdmin({
-      nord: this.nord,
-      address: this.address,
-      walletSignFn: this.walletSignFn,
-      sessionSignFn: this.sessionSignFn,
-      transactionSignFn: this.transactionSignFn,
-      connection: this.connection,
-      sessionId: this.sessionId,
-      sessionPubKey: new Uint8Array(this.sessionPubKey),
-      publicKey: this.publicKey,
-      signFn: this.signFn,
-    });
-    this.cloneClientState(copy);
-    return copy;
-  }
-
-  /**
-   * Promote a `NordUser` session to an admin-capable client.
+  /** Create a new admin client.
    *
-   * @param user - Existing authenticated user session
-   * @param adminSignFn - Signature provider for admin actions
+   * @param nord - Nord instance
+   * @param signFn - Function to sign messages with the admin's wallet.
+   *
+   * `signFn` must sign the _hex-encoded_ message, not the raw message itself, for
+   * the purpose of being compatible with Solana wallets.
+   *
+   * In practice, you will do something along the lines of:
+   *
+   * ```typescript
+   * (x) => wallet.signMessage(new TextEncoder().encode(x.toHex()));
+   * ```
+   *
+   * For a software signing key, this might look more like:
+   *
+   * ```typescript
+   * (x) => nacl.sign.detached(new TextEncoder().encode(x.toHex()), sk);
+   * ``
+   *
+   * where `nacl` is the tweetnacl library.
    */
-  static fromUser(
-    user: NordUser,
-    adminSignFn: (message: Uint8Array) => Promise<Uint8Array>,
-  ): NordAdmin {
+  public static new({
+    nord,
+    signFn,
+  }: Readonly<{
+    nord: Nord;
+    signFn: (m: Uint8Array) => Promise<Uint8Array>;
+  }>): NordAdmin {
     return new NordAdmin({
-      nord: user.nord,
-      address: user.address,
-      walletSignFn: user.walletSignFn,
-      sessionSignFn: user.sessionSignFn,
-      transactionSignFn: user.transactionSignFn,
-      connection: user.connection,
-      sessionId: user.sessionId,
-      sessionPubKey: new Uint8Array(user.sessionPubKey),
-      publicKey: user.publicKey,
-      signFn: adminSignFn,
+      nord,
+      signFn,
     });
   }
 
@@ -148,19 +140,19 @@ export class NordAdmin extends NordClient {
   private async submitAction(
     kind: proto.Action["kind"],
   ): Promise<proto.Receipt> {
-    try {
-      return await this.submitSignedAction(kind, async (message) => {
-        const signature = await this.signFn(message);
-        const signed = new Uint8Array(message.length + signature.length);
-        signed.set(message);
-        signed.set(signature, message.length);
-        return signed;
-      });
-    } catch (error) {
-      throw new NordError(`Admin action ${kind.case} failed`, {
-        cause: error,
-      });
-    }
+    const timestamp = await this.nord.getTimestamp();
+    const action = createAction(timestamp, 0, kind);
+    return sendAction(
+      this.nord.webServerUrl,
+      async (xs: Uint8Array) => {
+        const signature = await this.signFn(xs);
+        if (signature.length !== 64) {
+          throw new NordError("invalid signature length; must be 64 bytes");
+        }
+        return Uint8Array.from([...xs, ...signature]);
+      },
+      action,
+    );
   }
 
   /**
@@ -170,21 +162,26 @@ export class NordAdmin extends NordClient {
    * @returns Action identifier and resulting token metadata
    * @throws {NordError} If the action submission fails
    */
-  async createToken(
-    params: CreateTokenParams,
-  ): Promise<{ actionId: bigint } & proto.Receipt_InsertTokenResult> {
-    checkPubKeyLength(KeyType.Ed25519, params.solAddr.length);
+  async createToken({
+    tokenDecimals,
+    weightBps,
+    viewSymbol,
+    oracleSymbol,
+    mintAddr,
+  }: CreateTokenParams): Promise<
+    { actionId: bigint } & proto.Receipt_InsertTokenResult
+  > {
     const receipt = await this.submitAction({
       case: "createToken",
       value: create(proto.Action_CreateTokenSchema, {
-        tokenDecimals: params.tokenDecimals,
-        weightBps: params.weightBps,
-        viewSymbol: params.viewSymbol,
-        oracleSymbol: params.oracleSymbol,
-        solAddr: params.solAddr,
+        tokenDecimals,
+        weightBps,
+        viewSymbol,
+        oracleSymbol,
+        solAddr: mintAddr.toBytes(),
       }),
     });
-    this.expectReceiptKind(receipt, "insertTokenResult", "create token");
+    expectReceiptKind(receipt, "insertTokenResult", "create token");
     return { actionId: receipt.actionId, ...receipt.kind.value };
   }
 
@@ -212,7 +209,7 @@ export class NordAdmin extends NordClient {
         baseTokenId: params.baseTokenId,
       }),
     });
-    this.expectReceiptKind(receipt, "insertMarketResult", "create market");
+    expectReceiptKind(receipt, "insertMarketResult", "create market");
     return { actionId: receipt.actionId, ...receipt.kind.value };
   }
 
@@ -252,7 +249,7 @@ export class NordAdmin extends NordClient {
         addresses,
       }),
     });
-    this.expectReceiptKind(
+    expectReceiptKind(
       receipt,
       "updateGuardianSetResult",
       "update wormhole guardians",
@@ -293,11 +290,7 @@ export class NordAdmin extends NordClient {
         priceFeedId,
       }),
     });
-    this.expectReceiptKind(
-      receipt,
-      "oracleSymbolFeedResult",
-      "set symbol feed",
-    );
+    expectReceiptKind(receipt, "oracleSymbolFeedResult", "set symbol feed");
     return { actionId: receipt.actionId, ...receipt.kind.value };
   }
 
@@ -312,7 +305,7 @@ export class NordAdmin extends NordClient {
       case: "pause",
       value: create(proto.Action_PauseSchema, {}),
     });
-    this.expectReceiptKind(receipt, "paused", "pause");
+    expectReceiptKind(receipt, "paused", "pause");
     return { actionId: receipt.actionId };
   }
 
@@ -327,7 +320,7 @@ export class NordAdmin extends NordClient {
       case: "unpause",
       value: create(proto.Action_UnpauseSchema, {}),
     });
-    this.expectReceiptKind(receipt, "unpaused", "unpause");
+    expectReceiptKind(receipt, "unpaused", "unpause");
     return { actionId: receipt.actionId };
   }
 
@@ -347,7 +340,7 @@ export class NordAdmin extends NordClient {
         marketId: params.marketId,
       }),
     });
-    this.expectReceiptKind(receipt, "marketFreezeUpdated", "freeze market");
+    expectReceiptKind(receipt, "marketFreezeUpdated", "freeze market");
     return { actionId: receipt.actionId, ...receipt.kind.value };
   }
 
@@ -367,7 +360,7 @@ export class NordAdmin extends NordClient {
         marketId: params.marketId,
       }),
     });
-    this.expectReceiptKind(receipt, "marketFreezeUpdated", "unfreeze market");
+    expectReceiptKind(receipt, "marketFreezeUpdated", "unfreeze market");
     return { actionId: receipt.actionId, ...receipt.kind.value };
   }
 
@@ -391,7 +384,7 @@ export class NordAdmin extends NordClient {
         config: create(proto.FeeTierConfigSchema, params.config),
       }),
     });
-    this.expectReceiptKind(receipt, "feeTierAdded", "add fee tier");
+    expectReceiptKind(receipt, "feeTierAdded", "add fee tier");
     return { actionId: receipt.actionId, ...receipt.kind.value };
   }
 
@@ -415,7 +408,7 @@ export class NordAdmin extends NordClient {
         config: create(proto.FeeTierConfigSchema, params.config),
       }),
     });
-    this.expectReceiptKind(receipt, "feeTierUpdated", "update fee tier");
+    expectReceiptKind(receipt, "feeTierUpdated", "update fee tier");
     return { actionId: receipt.actionId, ...receipt.kind.value };
   }
 
@@ -442,11 +435,7 @@ export class NordAdmin extends NordClient {
         tierId,
       }),
     });
-    this.expectReceiptKind(
-      receipt,
-      "accountsTierUpdated",
-      "update accounts tier",
-    );
+    expectReceiptKind(receipt, "accountsTierUpdated", "update accounts tier");
     return { actionId: receipt.actionId, ...receipt.kind.value };
   }
 }

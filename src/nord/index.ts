@@ -11,7 +11,6 @@ export type {
   PythSetSymbolFeedParams,
   FreezeMarketParams,
   UnfreezeMarketParams,
-  NordAdminParams,
 } from "./client/NordAdmin";
 
 // Export utility classes

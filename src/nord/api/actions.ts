@@ -2,7 +2,6 @@ import Decimal from "decimal.js";
 import * as proto from "../../gen/nord_pb";
 import { paths } from "../../gen/openapi";
 import createClient from "openapi-fetch";
-
 import { create } from "@bufbuild/protobuf";
 import {
   FillMode,
@@ -21,6 +20,32 @@ import {
   toScaledU64,
 } from "../../utils";
 import { sizeDelimitedEncode } from "@bufbuild/protobuf/wire";
+import { NordError } from "../utils/NordError";
+
+type ReceiptKind = NonNullable<proto.Receipt["kind"]>;
+type ExtractReceiptKind<K extends ReceiptKind["case"]> = Extract<
+  ReceiptKind,
+  { case: K }
+>;
+
+export function formatReceiptError(receipt: proto.Receipt): string {
+  if (receipt.kind?.case === "err") {
+    const err = receipt.kind.value;
+    return proto.Error[err] ?? err.toString();
+  }
+  return receipt.kind?.case ?? "unknown";
+}
+
+export function expectReceiptKind<K extends ReceiptKind["case"]>(
+  receipt: proto.Receipt,
+  expected: K,
+  action: string,
+): asserts receipt is proto.Receipt & { kind: ExtractReceiptKind<K> } {
+  if (receipt.kind?.case !== expected) {
+    const label = formatReceiptError(receipt);
+    throw new NordError(`Failed to ${action}: ${label}`);
+  }
+}
 
 async function sessionSign(
   signFn: (message: Uint8Array) => Promise<Uint8Array>,
