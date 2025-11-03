@@ -12,7 +12,6 @@ import fetch from "node-fetch";
 import { RequestInfo, RequestInit, Response } from "node-fetch";
 import { Keypair } from "@solana/web3.js";
 import bs58 from "bs58";
-import { NordError } from "./nord/utils/NordError";
 
 export const SESSION_TTL: bigint = 60n * 60n * 24n * 30n;
 export const ZERO_DECIMAL = new Decimal(0);

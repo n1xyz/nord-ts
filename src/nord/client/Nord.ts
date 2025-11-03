@@ -26,6 +26,7 @@ import {
   HistoryTriggerQuery,
   TriggerHistoryPage,
   FeeTierId,
+  AccountFeeTierPage,
   PageResultStringOrderInfo,
   PageResultStringTrade,
   OrderInfoFromApi,
@@ -712,6 +713,23 @@ export class Nord {
         query: {
           startInclusive: query?.startInclusive,
           pageSize: query?.pageSize,
+        },
+      },
+    });
+  }
+
+  /**
+   * List account fee tiers with pagination support.
+   */
+  public async getAccountsFeeTiers(query?: {
+    startInclusive?: number | null;
+    pageSize?: number | null;
+  }): Promise<AccountFeeTierPage> {
+    return await this.GET("/accounts/fee-tiers", {
+      params: {
+        query: {
+          startInclusive: query?.startInclusive ?? undefined,
+          pageSize: query?.pageSize ?? undefined,
         },
       },
     });
