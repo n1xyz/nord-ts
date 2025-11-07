@@ -42,6 +42,9 @@ export interface NordConfig {
   app: string;
   /** Solana cluster URL */
   solanaUrl: string;
+  /** Proton URL, defaults to webServerUrl */
+  // TODO: this is ass. move to NordUser.
+  protonUrl?: string;
   /**
    * Whether to initialize WebSockets on creation, defaults to true
    * @deprecated this is a funky api we're gonna be removing it

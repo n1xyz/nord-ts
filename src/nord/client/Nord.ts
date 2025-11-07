@@ -239,13 +239,14 @@ export class Nord {
     app,
     solanaUrl,
     webServerUrl,
+    protonUrl,
   }: Readonly<NordConfig>): Promise<Nord> {
     // TODO: we should parametrize the connectionn not have it done here.
     // this is a dogshit api, only here to be compatible with the shitty
     // vibecoded code and not break zero one team's workflow.
     const connection = new Connection(solanaUrl, { commitment: "confirmed" });
     const protonClient = await ProtonClient.init({
-      protonUrl: webServerUrl,
+      protonUrl: protonUrl ?? webServerUrl,
       app: new PublicKey(app),
       solConn: connection,
     });

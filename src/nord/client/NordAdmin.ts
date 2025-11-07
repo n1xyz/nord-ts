@@ -7,6 +7,15 @@ import { NordError } from "../utils/NordError";
 import { Nord } from "./Nord";
 import { FeeTierConfig } from "../../gen/nord_pb";
 
+// NOTE: keep in sync with `acl.rs`.
+// NOTE: don't forget `number` as int is internally a u32.
+export enum AclRole {
+  FEE_MANAGER = 1 << 0,
+  MARKET_MANAGER = 1 << 1,
+  // TODO: unsure about this?
+  ADMIN = 1 << 31,
+}
+
 /**
  * Parameters required to register a new token via the admin API.
  */
@@ -83,22 +92,27 @@ export interface UpdateFeeTierParams {
  */
 export class NordAdmin {
   private readonly nord: Nord;
+  private readonly admin: PublicKey;
   private readonly signFn: (x: Uint8Array) => Promise<Uint8Array>;
 
   private constructor({
     nord,
+    admin,
     signFn,
   }: {
     nord: Nord;
+    admin: PublicKey;
     signFn: (x: Uint8Array) => Promise<Uint8Array>;
   }) {
     this.nord = nord;
+    this.admin = admin;
     this.signFn = signFn;
   }
 
   /** Create a new admin client.
    *
    * @param nord - Nord instance
+   * @param admin - The user that will be signing actions.
    * @param signFn - Function to sign messages with the admin's wallet.
    *
    * `signFn` must sign the _hex-encoded_ message, not the raw message itself, for
@@ -120,13 +134,16 @@ export class NordAdmin {
    */
   public static new({
     nord,
+    admin,
     signFn,
   }: Readonly<{
     nord: Nord;
+    admin: PublicKey;
     signFn: (m: Uint8Array) => Promise<Uint8Array>;
   }>): NordAdmin {
     return new NordAdmin({
       nord,
+      admin,
       signFn,
     });
   }
@@ -155,6 +172,49 @@ export class NordAdmin {
     );
   }
 
+  /** Set acl permissions for a given user.
+   *
+   * If all roles are removed, the user is removed from the acl.
+   *
+   * @param target - User to update.
+   * @param addRoles - Roles to add to the user.
+   * @param removeRoles - Reles to remove from the user.
+   */
+  async updateAcl({
+    target,
+    addRoles,
+    removeRoles,
+  }: Readonly<{
+    target: PublicKey;
+    addRoles: AclRole[];
+    removeRoles: AclRole[];
+  }>): Promise<{ actionId: bigint } & proto.Receipt_AclUpdated> {
+    const allRoles = addRoles.concat(removeRoles);
+    if (allRoles.length !== new Set(allRoles).size) {
+      throw new NordError("duplicate roles in acl update; must be unique");
+    }
+
+    let mask = 0;
+    let values = 0;
+    for (const role of allRoles) {
+      mask |= role;
+    }
+    for (const role of addRoles) {
+      values |= role;
+    }
+
+    const receipt = await this.submitAction({
+      case: "updateAcl",
+      value: create(proto.Action_UpdateAclSchema, {
+        aclPubkey: this.admin.toBytes(),
+        targetPubkey: target.toBytes(),
+      }),
+    });
+    expectReceiptKind(receipt, "aclUpdated", "update acl");
+
+    return { ...receipt.kind.value, actionId: receipt.actionId };
+  }
+
   /**
    * Register a new token that can be listed on Nord.
    *
@@ -174,6 +234,7 @@ export class NordAdmin {
     const receipt = await this.submitAction({
       case: "createToken",
       value: create(proto.Action_CreateTokenSchema, {
+        aclPubkey: this.admin.toBytes(),
         tokenDecimals,
         weightBps,
         viewSymbol,
@@ -198,6 +259,7 @@ export class NordAdmin {
     const receipt = await this.submitAction({
       case: "createMarket",
       value: create(proto.Action_CreateMarketSchema, {
+        aclPubkey: this.admin.toBytes(),
         sizeDecimals: params.sizeDecimals,
         priceDecimals: params.priceDecimals,
         imfBps: params.imfBps,
@@ -245,6 +307,7 @@ export class NordAdmin {
     const receipt = await this.submitAction({
       case: "pythSetWormholeGuardians",
       value: create(proto.Action_PythSetWormholeGuardiansSchema, {
+        aclPubkey: this.admin.toBytes(),
         guardianSetIndex: params.guardianSetIndex,
         addresses,
       }),
@@ -286,6 +349,7 @@ export class NordAdmin {
     const receipt = await this.submitAction({
       case: "pythSetSymbolFeed",
       value: create(proto.Action_PythSetSymbolFeedSchema, {
+        aclPubkey: this.admin.toBytes(),
         oracleSymbol: params.oracleSymbol,
         priceFeedId,
       }),
@@ -303,7 +367,9 @@ export class NordAdmin {
   async pause(): Promise<{ actionId: bigint }> {
     const receipt = await this.submitAction({
       case: "pause",
-      value: create(proto.Action_PauseSchema, {}),
+      value: create(proto.Action_PauseSchema, {
+        aclPubkey: this.admin.toBytes(),
+      }),
     });
     expectReceiptKind(receipt, "paused", "pause");
     return { actionId: receipt.actionId };
@@ -318,7 +384,9 @@ export class NordAdmin {
   async unpause(): Promise<{ actionId: bigint }> {
     const receipt = await this.submitAction({
       case: "unpause",
-      value: create(proto.Action_UnpauseSchema, {}),
+      value: create(proto.Action_UnpauseSchema, {
+        aclPubkey: this.admin.toBytes(),
+      }),
     });
     expectReceiptKind(receipt, "unpaused", "unpause");
     return { actionId: receipt.actionId };
@@ -338,6 +406,7 @@ export class NordAdmin {
       case: "freezeMarket",
       value: create(proto.Action_FreezeMarketSchema, {
         marketId: params.marketId,
+        aclPubkey: this.admin.toBytes(),
       }),
     });
     expectReceiptKind(receipt, "marketFreezeUpdated", "freeze market");
@@ -358,6 +427,7 @@ export class NordAdmin {
       case: "unfreezeMarket",
       value: create(proto.Action_UnfreezeMarketSchema, {
         marketId: params.marketId,
+        aclPubkey: this.admin.toBytes(),
       }),
     });
     expectReceiptKind(receipt, "marketFreezeUpdated", "unfreeze market");
@@ -381,6 +451,7 @@ export class NordAdmin {
     const receipt = await this.submitAction({
       case: "addFeeTier",
       value: create(proto.Action_AddFeeTierSchema, {
+        aclPubkey: this.admin.toBytes(),
         config: create(proto.FeeTierConfigSchema, params.config),
       }),
     });
@@ -404,6 +475,7 @@ export class NordAdmin {
     const receipt = await this.submitAction({
       case: "updateFeeTier",
       value: create(proto.Action_UpdateFeeTierSchema, {
+        aclPubkey: this.admin.toBytes(),
         id: params.tierId,
         config: create(proto.FeeTierConfigSchema, params.config),
       }),
@@ -431,6 +503,7 @@ export class NordAdmin {
     const receipt = await this.submitAction({
       case: "updateAccountsTier",
       value: create(proto.Action_UpdateAccountsTierSchema, {
+        aclPubkey: this.admin.toBytes(),
         accounts,
         tierId,
       }),

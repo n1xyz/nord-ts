@@ -1,7 +1,7 @@
 // Export main client classes
 export { Nord } from "./client/Nord";
 export { NordUser } from "./client/NordUser";
-export { NordAdmin } from "./client/NordAdmin";
+export { NordAdmin, AclRole } from "./client/NordAdmin";
 export { NordClient } from "./client/NordClient";
 export type { NordClientParams } from "./client/NordClient";
 export type {
