@@ -67,7 +67,7 @@ export class Nord {
   public readonly webServerUrl: string;
 
   /** Solana RPC URL */
-  public readonly solanaUrl: string;
+  public readonly solanaConnection: Connection;
 
   /** Available markets */
   public markets: Market[] = [];
@@ -93,16 +93,16 @@ export class Nord {
    * @throws {Error} If required configuration is missing
    */
   private constructor({
-    solanaUrl,
+    solanaConnection,
     webServerUrl,
     protonClient,
   }: Readonly<{
-    solanaUrl: string;
+    solanaConnection: Connection;
     webServerUrl: string;
     protonClient: ProtonClient;
   }>) {
     this.webServerUrl = webServerUrl;
-    this.solanaUrl = solanaUrl;
+    this.solanaConnection = solanaConnection;
     this.protonClient = protonClient;
     this.httpClient = createClient<paths>({ baseUrl: webServerUrl });
   }
@@ -225,6 +225,11 @@ export class Nord {
     }
   }
 
+  /** @deprecated use Nord.new */
+  public static async initNord(x: Readonly<NordConfig>): Promise<Nord> {
+    return await Nord.new(x);
+  }
+
   /**
    * Initialize a new Nord client
    *
@@ -235,24 +240,20 @@ export class Nord {
    * @returns Initialized Nord client
    * @throws {NordError} If initialization fails
    */
-  public static async initNord({
+  public static async new({
     app,
-    solanaUrl,
+    solanaConnection,
     webServerUrl,
     protonUrl,
   }: Readonly<NordConfig>): Promise<Nord> {
-    // TODO: we should parametrize the connectionn not have it done here.
-    // this is a dogshit api, only here to be compatible with the shitty
-    // vibecoded code and not break zero one team's workflow.
-    const connection = new Connection(solanaUrl, { commitment: "confirmed" });
     const protonClient = await ProtonClient.init({
       protonUrl: protonUrl ?? webServerUrl,
       app: new PublicKey(app),
-      solConn: connection,
+      solConn: solanaConnection,
     });
     const nord = new Nord({
       protonClient,
-      solanaUrl,
+      solanaConnection,
       webServerUrl,
     });
     await nord.init();

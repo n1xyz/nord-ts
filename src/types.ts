@@ -2,6 +2,7 @@ import * as proto from "./gen/nord_pb";
 import type { components } from "./gen/openapi.ts";
 import Decimal from "decimal.js";
 import { toScaledU64 } from "./utils";
+import { Connection } from "@solana/web3.js";
 
 /**
  * The peak TPS rate is queried over the specified period.
@@ -40,8 +41,8 @@ export interface NordConfig {
   webServerUrl: string;
   /** App address */
   app: string;
-  /** Solana cluster URL */
-  solanaUrl: string;
+  /** Solana connection */
+  solanaConnection: Connection;
   /** Proton URL, defaults to webServerUrl */
   // TODO: this is ass. move to NordUser.
   protonUrl?: string;
@@ -122,12 +123,6 @@ export interface Order {
   size: number;
   price: number;
   marketId: number;
-}
-
-export enum KeyType {
-  Ed25519,
-  Secp256k1,
-  Bls12_381,
 }
 
 export enum Side {

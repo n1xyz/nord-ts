@@ -1,7 +1,7 @@
 import { create } from "@bufbuild/protobuf";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, Transaction } from "@solana/web3.js";
 import * as proto from "../../gen/nord_pb";
-import { decodeHex } from "../../utils";
+import { decodeHex, signUserPayload } from "../../utils";
 import { createAction, sendAction, expectReceiptKind } from "../api/actions";
 import { NordError } from "../utils/NordError";
 import { Nord } from "./Nord";
@@ -93,7 +93,7 @@ export interface UpdateFeeTierParams {
 export class NordAdmin {
   private readonly nord: Nord;
   private readonly admin: PublicKey;
-  private readonly signFn: (x: Uint8Array) => Promise<Uint8Array>;
+  private readonly signFn: (_: Transaction) => Promise<Transaction>;
 
   private constructor({
     nord,
@@ -102,7 +102,7 @@ export class NordAdmin {
   }: {
     nord: Nord;
     admin: PublicKey;
-    signFn: (x: Uint8Array) => Promise<Uint8Array>;
+    signFn: (x: Transaction) => Promise<Transaction>;
   }) {
     this.nord = nord;
     this.admin = admin;
@@ -114,23 +114,6 @@ export class NordAdmin {
    * @param nord - Nord instance
    * @param admin - The user that will be signing actions.
    * @param signFn - Function to sign messages with the admin's wallet.
-   *
-   * `signFn` must sign the _hex-encoded_ message, not the raw message itself, for
-   * the purpose of being compatible with Solana wallets.
-   *
-   * In practice, you will do something along the lines of:
-   *
-   * ```typescript
-   * (x) => wallet.signMessage(new TextEncoder().encode(x.toHex()));
-   * ```
-   *
-   * For a software signing key, this might look more like:
-   *
-   * ```typescript
-   * (x) => nacl.sign.detached(new TextEncoder().encode(x.toHex()), sk);
-   * ``
-   *
-   * where `nacl` is the tweetnacl library.
    */
   public static new({
     nord,
@@ -139,7 +122,7 @@ export class NordAdmin {
   }: Readonly<{
     nord: Nord;
     admin: PublicKey;
-    signFn: (m: Uint8Array) => Promise<Uint8Array>;
+    signFn: (m: Transaction) => Promise<Transaction>;
   }>): NordAdmin {
     return new NordAdmin({
       nord,
@@ -162,10 +145,11 @@ export class NordAdmin {
     return sendAction(
       this.nord.webServerUrl,
       async (xs: Uint8Array) => {
-        const signature = await this.signFn(xs);
-        if (signature.length !== 64) {
-          throw new NordError("invalid signature length; must be 64 bytes");
-        }
+        const signature = await signUserPayload({
+          payload: xs,
+          user: this.admin,
+          signTransaction: this.signFn,
+        });
         return Uint8Array.from([...xs, ...signature]);
       },
       action,

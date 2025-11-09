@@ -4,16 +4,9 @@ import {
   TOKEN_PROGRAM_ID,
   TOKEN_2022_PROGRAM_ID,
 } from "@solana/spl-token";
-import {
-  Connection,
-  PublicKey,
-  Transaction,
-  SendOptions,
-} from "@solana/web3.js";
+import { PublicKey, Transaction, SendOptions } from "@solana/web3.js";
 import Decimal from "decimal.js";
 import * as ed from "@noble/ed25519";
-import { sha512 } from "@noble/hashes/sha512";
-ed.etc.sha512Sync = sha512;
 import { floatToScaledBigIntLossy } from "@n1xyz/proton";
 import {
   FillMode,
@@ -40,11 +33,12 @@ import {
   revokeSession,
   atomic,
   expectReceiptKind,
+  createAction,
+  sendAction,
   AtomicSubaction,
 } from "../api/actions";
 import { NordError } from "../utils/NordError";
 import { Nord } from "./Nord";
-import { NordClient } from "./NordClient";
 
 /**
  * Parameters for creating a NordUser instance
@@ -53,20 +47,11 @@ export interface NordUserParams {
   /** Nord client instance */
   nord: Nord;
 
-  /** User's blockchain address */
-  address: string;
-
-  /** Function to sign messages with the user's wallet */
-  walletSignFn: (message: Uint8Array | string) => Promise<Uint8Array>;
-
   /** Function to sign messages with the user's session key */
   sessionSignFn: (message: Uint8Array) => Promise<Uint8Array>;
 
   /** Function to sign transactions with the user's wallet (optional) */
-  transactionSignFn: <T extends Transaction>(tx: T) => Promise<T>;
-
-  /** Solana connection (optional) */
-  connection?: Connection;
+  transactionSignFn: (tx: Transaction) => Promise<Transaction>;
 
   /** Session ID (optional) */
   sessionId?: bigint;
@@ -183,7 +168,17 @@ export interface UserAtomicSubaction {
 /**
  * User class for interacting with the Nord protocol
  */
-export class NordUser extends NordClient {
+export class NordUser {
+  public readonly nord: Nord;
+  public readonly sessionSignFn: (message: Uint8Array) => Promise<Uint8Array>;
+  public readonly transactionSignFn: (tx: Transaction) => Promise<Transaction>;
+  public sessionId?: bigint;
+  public sessionPubKey: PublicKey;
+  public publicKey: PublicKey;
+  public lastTs = 0;
+
+  private actionNonce = 0;
+
   /** User balances by token symbol */
   public balances: {
     [key: string]: { accountId: number; balance: number; symbol: string }[];
@@ -232,45 +227,13 @@ export class NordUser extends NordClient {
    * @param params - Parameters for creating a NordUser
    * @throws {NordError} If required parameters are missing
    */
-  constructor({
-    address,
-    nord,
-    publicKey,
-    sessionPubKey,
-    sessionSignFn,
-    transactionSignFn,
-    walletSignFn,
-    connection,
-    sessionId,
-  }: NordUserParams) {
-    if (!walletSignFn) {
-      throw new NordError("Wallet sign function is required");
-    }
-    if (!sessionSignFn) {
-      throw new NordError("Session sign function is required");
-    }
-    if (!sessionPubKey) {
-      throw new NordError("Session public key is required");
-    }
-
-    let parsedAddress: PublicKey;
-    try {
-      parsedAddress = new PublicKey(address);
-    } catch (error) {
-      throw new NordError("Invalid Solana address", { cause: error });
-    }
-
-    super({
-      nord,
-      address: parsedAddress,
-      walletSignFn,
-      sessionSignFn,
-      transactionSignFn,
-      connection,
-      sessionId,
-      sessionPubKey,
-      publicKey,
-    });
+  constructor(params: NordUserParams) {
+    this.nord = params.nord;
+    this.sessionSignFn = params.sessionSignFn;
+    this.transactionSignFn = params.transactionSignFn;
+    this.sessionId = params.sessionId;
+    this.sessionPubKey = new PublicKey(params.sessionPubKey);
+    this.publicKey = params.publicKey;
 
     // Convert tokens from info endpoint to SPLTokenInfo
     if (this.nord.tokens && this.nord.tokens.length > 0) {
@@ -284,72 +247,17 @@ export class NordUser extends NordClient {
   }
 
   /**
-   * Create a clone of this NordUser instance
-   *
-   * @returns A new NordUser instance with the same properties
-   */
-  clone(): NordUser {
-    const cloned = new NordUser({
-      nord: this.nord,
-      address: this.address.toBase58(),
-      walletSignFn: this.walletSignFn,
-      sessionSignFn: this.sessionSignFn,
-      transactionSignFn: this.transactionSignFn,
-      connection: this.connection,
-      sessionPubKey: new Uint8Array(this.sessionPubKey),
-      publicKey: this.publicKey,
-      sessionId: this.sessionId,
-    });
-
-    // Copy other properties
-    cloned.balances = { ...this.balances };
-    cloned.positions = { ...this.positions };
-    cloned.margins = { ...this.margins };
-    cloned.accountIds = this.accountIds ? [...this.accountIds] : undefined;
-    cloned.splTokenInfos = [...this.splTokenInfos];
-    this.cloneClientState(cloned);
-
-    return cloned;
-  }
-
-  /**
    * Create a NordUser from a private key
    *
    * @param nord - Nord instance
    * @param privateKey - Private key as string or Uint8Array
-   * @param connection - Solana connection (optional)
    * @returns NordUser instance
    * @throws {NordError} If the private key is invalid
    */
-  static fromPrivateKey(
-    nord: Nord,
-    privateKey: string | Uint8Array,
-    connection?: Connection,
-  ): NordUser {
+  static fromPrivateKey(nord: Nord, privateKey: string | Uint8Array): NordUser {
     try {
       const keypair = keypairFromPrivateKey(privateKey);
       const publicKey = keypair.publicKey;
-
-      // Create a signing function that uses the keypair but doesn't expose it
-      const walletSignFn = async (
-        message: Uint8Array | string,
-      ): Promise<Uint8Array> => {
-        function toHex(buffer: Uint8Array) {
-          return Array.from(buffer)
-            .map((byte) => byte.toString(16).padStart(2, "0"))
-            .join("");
-        }
-        const messageBuffer = new TextEncoder().encode(
-          toHex(message as Uint8Array),
-        );
-
-        // Use ed25519 to sign the message
-        const signature = ed.sign(
-          messageBuffer,
-          keypair.secretKey.slice(0, 32),
-        );
-        return signature;
-      };
 
       const sessionSignFn = async (
         message: Uint8Array,
@@ -358,28 +266,19 @@ export class NordUser extends NordClient {
         return ed.sign(message, keypair.secretKey.slice(0, 32));
       };
 
-      // Create a transaction signing function
-      const transactionSignFn = async (transaction: any): Promise<any> => {
-        // This is a basic implementation - actual implementation would depend on the transaction type
-        if (transaction.sign) {
-          // Solana transaction
-          transaction.sign(keypair);
-          return transaction;
-        }
-
-        // For other transaction types, would need specific implementation
-        throw new NordError("Unsupported transaction type for signing");
+      const transactionSignFn = async (
+        tx: Transaction,
+      ): Promise<Transaction> => {
+        tx.sign(keypair);
+        return tx;
       };
 
       return new NordUser({
         nord,
-        address: publicKey.toBase58(),
-        walletSignFn,
         sessionSignFn,
         transactionSignFn,
-        connection,
         publicKey,
-        sessionPubKey: publicKey.toBytes(), // Use the public key derived from the private key as the session public key
+        sessionPubKey: publicKey.toBytes(),
       });
     } catch (error) {
       throw new NordError("Failed to create NordUser from private key", {
@@ -396,15 +295,9 @@ export class NordUser extends NordClient {
    * @throws {NordError} If required parameters are missing or operation fails
    */
   async getAssociatedTokenAccount(mint: PublicKey): Promise<PublicKey> {
-    if (!this.getSolanaPublicKey()) {
-      throw new NordError(
-        "Solana public key is required to get associated token account",
-      );
-    }
-
     try {
       // Get the token program ID from the mint account
-      const mintAccount = await this.connection.getAccountInfo(mint);
+      const mintAccount = await this.nord.solanaConnection.getAccountInfo(mint);
       if (!mintAccount) {
         throw new NordError("Mint account not found");
       }
@@ -422,7 +315,7 @@ export class NordUser extends NordClient {
 
       const associatedTokenAddress = await getAssociatedTokenAddress(
         mint,
-        this.getSolanaPublicKey(),
+        this.publicKey,
         false,
         tokenProgramId,
         ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -483,7 +376,7 @@ export class NordUser extends NordClient {
 
       const mint = new PublicKey(tokenInfo.mint);
       const fromAccount = await this.getAssociatedTokenAccount(mint);
-      const payer = this.getSolanaPublicKey();
+      const payer = this.publicKey;
 
       const { ix, extraSigner } = await this.nord.protonClient.buildDepositIx({
         payer,
@@ -493,7 +386,8 @@ export class NordUser extends NordClient {
         sourceTokenAccount: fromAccount,
       });
 
-      const { blockhash } = await this.connection.getLatestBlockhash();
+      const { blockhash } =
+        await this.nord.solanaConnection.getLatestBlockhash();
       const tx = new Transaction();
 
       tx.add(ix);
@@ -503,7 +397,7 @@ export class NordUser extends NordClient {
       const signedTx = await this.transactionSignFn(tx);
       signedTx.partialSign(extraSigner);
 
-      const signature = await this.connection.sendRawTransaction(
+      const signature = await this.nord.solanaConnection.sendRawTransaction(
         signedTx.serialize(),
         sendOptions,
       );
@@ -662,11 +556,11 @@ export class NordUser extends NordClient {
   async refreshSession(): Promise<void> {
     const result = await createSession(
       this.nord.webServerUrl,
-      this.walletSignFn,
+      this.transactionSignFn,
       await this.nord.getTimestamp(),
       this.getNonce(),
       {
-        userPubkey: optExpect(this.publicKey.toBytes(), "No user's public key"),
+        userPubkey: this.publicKey,
         sessionPubkey: this.sessionPubKey,
       },
     );
@@ -682,10 +576,11 @@ export class NordUser extends NordClient {
     try {
       await revokeSession(
         this.nord.webServerUrl,
-        this.walletSignFn,
+        this.transactionSignFn,
         await this.nord.getTimestamp(),
         this.getNonce(),
         {
+          userPubkey: this.publicKey,
           sessionId,
         },
       );
@@ -1124,24 +1019,18 @@ export class NordUser extends NordClient {
       maxRetries = 3,
     } = options;
 
-    if (!this.connection || !this.getSolanaPublicKey()) {
-      throw new NordError(
-        "Connection and Solana public key are required to get Solana balances",
-      );
-    }
-
     const balances: { [symbol: string]: number } = {};
     const tokenAccounts: { [symbol: string]: string } = {};
 
     try {
       // Get SOL balance (native token)
       const solBalance = await this.retryWithBackoff(
-        () => this.connection!.getBalance(this.getSolanaPublicKey()),
+        () => this.nord.solanaConnection.getBalance(this.publicKey),
         maxRetries,
       );
       balances["SOL"] = solBalance / 1e9; // Convert lamports to SOL
       if (includeTokenAccounts) {
-        tokenAccounts["SOL"] = this.getSolanaPublicKey().toString();
+        tokenAccounts["SOL"] = this.publicKey.toString();
       }
 
       // Get SPL token balances using mintAddr from Nord tokens
@@ -1157,8 +1046,7 @@ export class NordUser extends NordClient {
             try {
               const mint = new PublicKey(token.mintAddr);
               const associatedTokenAddress = await this.retryWithBackoff(
-                () =>
-                  getAssociatedTokenAddress(mint, this.getSolanaPublicKey()),
+                () => getAssociatedTokenAddress(mint, this.publicKey),
                 maxRetries,
               );
 
@@ -1169,7 +1057,7 @@ export class NordUser extends NordClient {
               try {
                 const tokenBalance = await this.retryWithBackoff(
                   () =>
-                    this.connection.getTokenAccountBalance(
+                    this.nord.solanaConnection.getTokenAccountBalance(
                       associatedTokenAddress,
                     ),
                   maxRetries,
@@ -1207,5 +1095,19 @@ export class NordUser extends NordClient {
         cause: error,
       });
     }
+  }
+
+  protected async submitSignedAction(
+    kind: proto.Action["kind"],
+    makeSignedMessage: (message: Uint8Array) => Promise<Uint8Array>,
+  ): Promise<proto.Receipt> {
+    const nonce = this.nextActionNonce();
+    const currentTimestamp = await this.nord.getTimestamp();
+    const action = createAction(currentTimestamp, nonce, kind);
+    return sendAction(this.nord.webServerUrl, makeSignedMessage, action);
+  }
+
+  protected nextActionNonce(): number {
+    return ++this.actionNonce;
   }
 }

@@ -1,9 +1,5 @@
 import { Decimal } from "decimal.js";
-import { ed25519 } from "@noble/curves/ed25519";
-import { bls12_381 as bls } from "@noble/curves/bls12-381";
-import { secp256k1 as secp } from "@noble/curves/secp256k1";
-import { sha256 } from "@noble/hashes/sha256";
-import { KeyType, type Market, type Token } from "./types";
+import { type Market, type Token } from "./types";
 import { sizeDelimitedPeek } from "@bufbuild/protobuf/wire";
 import { fromBinary, type Message } from "@bufbuild/protobuf";
 import type { GenMessage } from "@bufbuild/protobuf/codegenv2";
@@ -12,6 +8,7 @@ import fetch from "node-fetch";
 import { RequestInfo, RequestInit, Response } from "node-fetch";
 import { Keypair } from "@solana/web3.js";
 import bs58 from "bs58";
+import * as solana from "@solana/web3.js";
 
 export const SESSION_TTL: bigint = 60n * 60n * 24n * 30n;
 export const ZERO_DECIMAL = new Decimal(0);
@@ -33,7 +30,10 @@ export function isRfc3339(s: string): boolean {
   return REGEX.test(s);
 }
 
-export function assert(predicate: boolean, message?: string): void {
+export function assert(
+  predicate: boolean,
+  message?: string,
+): asserts predicate {
   if (!predicate) panic(message ?? "Assertion violated");
 }
 /**
@@ -60,31 +60,6 @@ export async function checkedFetch(
   const resp = await fetch(url, init);
   assert(resp.ok, `Request failed with ${resp.status}: ${resp.statusText}`);
   return resp;
-}
-
-/**
- * Signs an action using the specified secret key and key type.
- * @param action - The action data to be signed.
- * @param sk - Secret key used for signing the action.
- * @param keyType - Type of the key used for signing.
- * @returns A new Uint8Array containing the action followed by its signature.
- */
-export function signAction(
-  action: Uint8Array,
-  sk: Uint8Array,
-  keyType: KeyType,
-): Uint8Array {
-  let sig: Uint8Array;
-  if (keyType === KeyType.Ed25519) {
-    sig = ed25519.sign(action, sk);
-  } else if (keyType === KeyType.Bls12_381) {
-    sig = bls.sign(action, sk);
-  } else if (keyType === KeyType.Secp256k1) {
-    sig = secp.sign(sha256(action), sk).toCompactRawBytes();
-  } else {
-    throw new Error("Invalid key type");
-  }
-  return new Uint8Array([...action, ...sig]);
 }
 
 /**
@@ -217,22 +192,6 @@ export function decodeLengthDelimited<T extends Message>(
   );
 }
 
-export function checkPubKeyLength(keyType: KeyType, len: number): void {
-  if (keyType === KeyType.Bls12_381) {
-    throw new Error(
-      "Cannot create a user using Bls12_381, use Ed25119 or Secp256k1 instead.",
-    );
-  }
-
-  if (len !== 32 && keyType === KeyType.Ed25519) {
-    throw new Error("Ed25519 pubkeys must be 32 length.");
-  }
-
-  if (len !== 33 && keyType === KeyType.Secp256k1) {
-    throw new Error("Secp256k1 pubkeys must be 33 length.");
-  }
-}
-
 export function decodeHex(value: string): Uint8Array {
   const hex = value.startsWith("0x") ? value.slice(2) : value;
   return Uint8Array.from(Buffer.from(hex, "hex"));
@@ -266,4 +225,42 @@ export function keypairFromPrivateKey(
     return Keypair.fromSecretKey(bytes);
   }
   return Keypair.fromSecretKey(privateKey);
+}
+
+export async function signUserPayload({
+  payload,
+  user,
+  signTransaction,
+}: Readonly<{
+  payload: Uint8Array;
+  user: solana.PublicKey;
+  signTransaction: (tx: solana.Transaction) => Promise<solana.Transaction>;
+}>): Promise<Uint8Array> {
+  const tx = new solana.Transaction({
+    blockhash: bs58.encode(new Uint8Array(32)),
+    lastValidBlockHeight: 0,
+    feePayer: user,
+  });
+  tx.add(
+    new solana.TransactionInstruction({
+      keys: [],
+      programId: user,
+      data: Buffer.from(payload),
+    }),
+  );
+  const signedTx = await signTransaction(tx);
+  const sig = signedTx.signatures[0];
+  assert(
+    sig.signature !== null,
+    "signature must be non-null; check your signTransaction function",
+  );
+  assert(
+    sig.signature.length === 64, //.
+    "signature must be 64 bytes",
+  );
+  assert(
+    sig.publicKey.equals(user),
+    `signature is for ${sig.publicKey}, expected ${user}`,
+  );
+  return sig.signature;
 }

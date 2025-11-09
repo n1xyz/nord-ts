@@ -6,7 +6,6 @@ import { create } from "@bufbuild/protobuf";
 import {
   FillMode,
   fillModeToProtoFillMode,
-  KeyType,
   Side,
   QuoteSize,
   TriggerKind,
@@ -14,13 +13,14 @@ import {
 import {
   assert,
   BigIntValue,
-  checkPubKeyLength,
   decodeLengthDelimited,
   SESSION_TTL,
   toScaledU64,
+  signUserPayload,
 } from "../../utils";
 import { sizeDelimitedEncode } from "@bufbuild/protobuf/wire";
 import { NordError } from "../utils/NordError";
+import { PublicKey, Transaction } from "@solana/web3.js";
 
 type ReceiptKind = NonNullable<proto.Receipt["kind"]>;
 type ExtractReceiptKind<K extends ReceiptKind["case"]> = Extract<
@@ -52,14 +52,6 @@ async function sessionSign(
   message: Uint8Array,
 ): Promise<Uint8Array> {
   const signature = await signFn(message);
-  return new Uint8Array([...message, ...signature]);
-}
-
-async function walletSign(
-  walletSignFn: (message: string | Uint8Array) => Promise<Uint8Array>,
-  message: Uint8Array,
-): Promise<Uint8Array> {
-  const signature = await walletSignFn(message);
   return new Uint8Array([...message, ...signature]);
 }
 
@@ -146,19 +138,16 @@ export async function prepareAction(
 
 export async function createSession(
   serverUrl: string,
-  walletSignFn: (message: string | Uint8Array) => Promise<Uint8Array>,
+  signTransaction: (tx: Transaction) => Promise<Transaction>,
   currentTimestamp: bigint,
   nonce: number,
   params: {
-    userPubkey: Uint8Array;
-    sessionPubkey: Uint8Array;
+    userPubkey: PublicKey;
+    sessionPubkey: PublicKey;
     // If not specified, set to current moment plus default session TTL
     expiryTimestamp?: bigint;
   },
 ): Promise<{ actionId: bigint; sessionId: bigint }> {
-  checkPubKeyLength(KeyType.Ed25519, params.userPubkey.length);
-  checkPubKeyLength(KeyType.Ed25519, params.sessionPubkey.length);
-
   let expiry = 0n;
 
   if (params.expiryTimestamp !== undefined) {
@@ -174,15 +163,24 @@ export async function createSession(
   const action = createAction(currentTimestamp, nonce, {
     case: "createSession",
     value: create(proto.Action_CreateSessionSchema, {
-      userPubkey: params.userPubkey,
-      blstPubkey: params.sessionPubkey,
+      userPubkey: params.userPubkey.toBytes(),
+      blstPubkey: params.sessionPubkey.toBytes(),
       expiryTimestamp: expiry,
     }),
   });
 
   const resp = await sendAction(
     serverUrl,
-    (m) => walletSign(walletSignFn, m),
+    async (payload) => {
+      return new Uint8Array([
+        ...payload,
+        ...(await signUserPayload({
+          payload,
+          user: params.userPubkey,
+          signTransaction,
+        })),
+      ]);
+    },
     action,
   );
 
@@ -198,11 +196,12 @@ export async function createSession(
 
 export async function revokeSession(
   serverUrl: string,
-  walletSignFn: (message: string | Uint8Array) => Promise<Uint8Array>,
+  signTransaction: (tx: Transaction) => Promise<Transaction>,
   currentTimestamp: bigint,
   nonce: number,
   params: {
     sessionId: BigIntValue;
+    userPubkey: PublicKey;
   },
 ): Promise<{ actionId: bigint }> {
   const action = createAction(currentTimestamp, nonce, {
@@ -214,7 +213,16 @@ export async function revokeSession(
 
   const resp = await sendAction(
     serverUrl,
-    (m) => walletSign(walletSignFn, m),
+    async (payload) => {
+      return new Uint8Array([
+        ...payload,
+        ...(await signUserPayload({
+          payload,
+          user: params.userPubkey,
+          signTransaction,
+        })),
+      ]);
+    },
     action,
   );
 

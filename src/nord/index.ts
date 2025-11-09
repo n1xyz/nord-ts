@@ -2,8 +2,6 @@
 export { Nord } from "./client/Nord";
 export { NordUser } from "./client/NordUser";
 export { NordAdmin, AclRole } from "./client/NordAdmin";
-export { NordClient } from "./client/NordClient";
-export type { NordClientParams } from "./client/NordClient";
 export type {
   CreateTokenParams,
   CreateMarketParams,
