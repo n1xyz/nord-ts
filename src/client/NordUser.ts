@@ -15,8 +15,8 @@ import {
   QuoteSize,
   TriggerKind,
   fillModeToProtoFillMode,
-} from "../../types";
-import * as proto from "../../gen/nord_pb";
+} from "../types";
+import * as proto from "../gen/nord_pb";
 import {
   BigIntValue,
   checkedFetch,
@@ -26,7 +26,7 @@ import {
   optExpect,
   keypairFromPrivateKey,
   toScaledU64,
-} from "../../utils";
+} from "../utils";
 import { create } from "@bufbuild/protobuf";
 import {
   createSession,
@@ -36,8 +36,8 @@ import {
   createAction,
   sendAction,
   AtomicSubaction,
-} from "../api/actions";
-import { NordError } from "../utils/NordError";
+} from "../actions";
+import { NordError } from "../error";
 import { Nord } from "./Nord";
 
 /**

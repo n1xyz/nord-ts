@@ -1,11 +1,11 @@
 import { create } from "@bufbuild/protobuf";
 import { PublicKey, Transaction } from "@solana/web3.js";
-import * as proto from "../../gen/nord_pb";
-import { decodeHex, signUserPayload } from "../../utils";
-import { createAction, sendAction, expectReceiptKind } from "../api/actions";
-import { NordError } from "../utils/NordError";
+import * as proto from "../gen/nord_pb";
+import { decodeHex, signUserPayload } from "../utils";
+import { createAction, sendAction, expectReceiptKind } from "../actions";
+import { NordError } from "../error";
 import { Nord } from "./Nord";
-import { FeeTierConfig } from "../../gen/nord_pb";
+import { FeeTierConfig } from "../gen/nord_pb";
 
 // NOTE: keep in sync with `acl.rs`.
 // NOTE: don't forget `number` as int is internally a u32.

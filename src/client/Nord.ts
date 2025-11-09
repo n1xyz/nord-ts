@@ -2,14 +2,13 @@ import { ProtonClient } from "@n1xyz/proton";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { EventEmitter } from "events";
 import createClient, { Client, FetchOptions } from "openapi-fetch";
-import * as proto from "../../gen/nord_pb";
-import type { paths } from "../../gen/openapi.ts";
+import * as proto from "../gen/nord_pb";
+import type { paths } from "../gen/openapi.ts";
 import {
   Account,
   AccountPnlPage,
   AccountPnlQuery,
   ActionResponse,
-  AggregateMetrics,
   MarketsInfo,
   Market,
   MarketStats,
@@ -17,7 +16,6 @@ import {
   OrderbookQuery,
   OrderbookResponse,
   FeeTierConfig,
-  PeakTpsPeriodUnit,
   SubscriptionPattern,
   Token,
   TradesResponse,
@@ -32,13 +30,15 @@ import {
   OrderInfoFromApi,
   TokenStats,
   FillRole,
-} from "../../types";
-import * as utils from "../../utils";
-import { NordWebSocketClient } from "../../websocket/index";
-import * as core from "../api/core";
-import * as metrics from "../api/metrics";
-import { OrderbookSubscription, TradeSubscription } from "../models/Subscriber";
-import { NordError } from "../utils/NordError";
+} from "../types";
+import * as utils from "../utils";
+import { NordWebSocketClient } from "../websocket/index";
+import { initWebSocketClient } from "../websocket";
+import {
+  OrderbookSubscription,
+  TradeSubscription,
+} from "../websocket/Subscriber";
+import { NordError } from "../error";
 
 /**
  * User subscription interface
@@ -165,7 +165,7 @@ export class Nord {
     }
 
     // Create and return a new WebSocket client
-    return core.initWebSocketClient(this.webServerUrl, subscriptions);
+    return initWebSocketClient(this.webServerUrl, subscriptions);
   }
 
   private async GET<P extends keyof paths & string>(
@@ -325,79 +325,6 @@ export class Nord {
    */
   async getLastActionId(): Promise<number> {
     return await this.GET("/action/last-executed-id", {});
-  }
-
-  /**
-   * Fetch aggregate metrics from the Nord API
-   *
-   * @param txPeakTpsPeriod - Period for peak TPS calculation
-   * @param txPeakTpsPeriodUnit - Unit for peak TPS period
-   * @returns Aggregate metrics
-   * @throws {NordError} If the request fails
-   */
-  async aggregateMetrics(
-    txPeakTpsPeriod = 1,
-    txPeakTpsPeriodUnit: PeakTpsPeriodUnit = PeakTpsPeriodUnit.Day,
-  ): Promise<AggregateMetrics> {
-    return metrics.aggregateMetrics(
-      this.webServerUrl,
-      txPeakTpsPeriod,
-      txPeakTpsPeriodUnit,
-    );
-  }
-
-  /**
-   * Get current transactions per second
-   *
-   * @param period - Time period for the query
-   * @returns Current TPS value
-   * @throws {NordError} If the request fails
-   */
-  async getCurrentTps(period: string = "1m") {
-    return metrics.getCurrentTps(this.webServerUrl, period);
-  }
-
-  /**
-   * Get peak transactions per second
-   *
-   * @param period - Time period for the query
-   * @returns Peak TPS value
-   * @throws {NordError} If the request fails
-   */
-  async getPeakTps(period: string = "24h") {
-    return metrics.getPeakTps(this.webServerUrl, period);
-  }
-
-  /**
-   * Get median transaction latency
-   *
-   * @param period - Time period for the query
-   * @returns Median latency in milliseconds
-   * @throws {NordError} If the request fails
-   */
-  async getMedianLatency(period: string = "1m") {
-    return metrics.getMedianLatency(this.webServerUrl, period);
-  }
-
-  /**
-   * Get total transaction count
-   *
-   * @returns Total transaction count
-   * @throws {NordError} If the request fails
-   */
-  async getTotalTransactions() {
-    return metrics.getTotalTransactions(this.webServerUrl);
-  }
-
-  /**
-   * Query Prometheus metrics
-   *
-   * @param params - Prometheus query parameters
-   * @returns Query result as a number
-   * @throws {NordError} If the request fails
-   */
-  async queryPrometheus(params: string): Promise<number> {
-    return metrics.queryPrometheus(this.webServerUrl, params);
   }
 
   /**

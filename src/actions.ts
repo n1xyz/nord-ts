@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
-import * as proto from "../../gen/nord_pb";
-import { paths } from "../../gen/openapi";
+import * as proto from "./gen/nord_pb";
+import { paths } from "./gen/openapi";
 import createClient from "openapi-fetch";
 import { create } from "@bufbuild/protobuf";
 import {
@@ -9,7 +9,7 @@ import {
   Side,
   QuoteSize,
   TriggerKind,
-} from "../../types";
+} from "./types";
 import {
   assert,
   BigIntValue,
@@ -17,9 +17,9 @@ import {
   SESSION_TTL,
   toScaledU64,
   signUserPayload,
-} from "../../utils";
+} from "./utils";
 import { sizeDelimitedEncode } from "@bufbuild/protobuf/wire";
-import { NordError } from "../utils/NordError";
+import { NordError } from "./error";
 import { PublicKey, Transaction } from "@solana/web3.js";
 
 type ReceiptKind = NonNullable<proto.Receipt["kind"]>;

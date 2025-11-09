@@ -5,23 +5,6 @@ import { toScaledU64 } from "./utils";
 import { Connection } from "@solana/web3.js";
 
 /**
- * The peak TPS rate is queried over the specified period.
- * The period is specified in units of: {hour, day, week, month, year}.
- * Example inputs:
- *  1. AggregateMetrics.txPeakTpsPeriod = 3,
- *     AggregateMetrics.txPeakTpsPeriodUnit = "d" => Peak TPS over last 3 days.
- *  1. AggregateMetrics.txPeakTpsPeriod = 1,
- *     AggregateMetrics.txPeakTpsPeriodUnit = "w" => Peak TPS over last week.
- */
-export enum PeakTpsPeriodUnit {
-  Hour = "h",
-  Day = "d",
-  Week = "w",
-  Month = "m",
-  Year = "y",
-}
-
-/**
  * Nord subscription type for trades or deltas
  */
 export type SubscriptionType = "trades" | "deltas" | "account";
@@ -205,22 +188,6 @@ export interface BlockSummary {
   block_number: number;
   from_action_id: number;
   to_action_id: number;
-}
-
-/**
- * Aggregate metrics
- * blocks_total: Total number of L2 blocks.
- * tx_total: Total number of transactions.
- * tx_tps: Transaction throughput.
- * tx_tps_peak: Peak transaction throughput.
- * request_latency_average: Average request latency.
- */
-export interface AggregateMetrics {
-  blocks_total: number;
-  tx_total: number;
-  tx_tps: number;
-  tx_tps_peak: number;
-  request_latency_average: number;
 }
 
 /**

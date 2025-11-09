@@ -6,8 +6,8 @@ import {
   SubscriberConfig,
   StreamTrade,
   Trades,
-} from "../../types";
-import { MAX_BUFFER_LEN } from "../../utils";
+} from "../types";
+import { MAX_BUFFER_LEN } from "../utils";
 
 /**
  * Subscriber class for handling WebSocket subscriptions
