@@ -208,6 +208,8 @@ export class NordAdmin {
       value: create(proto.Action_UpdateAclSchema, {
         aclPubkey: this.admin.toBytes(),
         targetPubkey: target.toBytes(),
+        rolesValue: values,
+        rolesMask: mask,
       }),
     });
     expectReceiptKind(receipt, "aclUpdated", "update acl");
