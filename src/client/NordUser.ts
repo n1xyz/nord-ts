@@ -41,96 +41,6 @@ import { NordError } from "../error";
 import { Nord } from "./Nord";
 
 /**
- * Parameters for creating a NordUser instance
- */
-export interface NordUserParams {
-  /** Nord client instance */
-  nord: Nord;
-
-  /** Function to sign messages with the user's session key */
-  sessionSignFn: (message: Uint8Array) => Promise<Uint8Array>;
-
-  /** Function to sign transactions with the user's wallet (optional) */
-  transactionSignFn: (tx: Transaction) => Promise<Transaction>;
-
-  /** Session ID (optional) */
-  sessionId?: bigint;
-
-  /** Session public key (required) */
-  sessionPubKey: Uint8Array;
-
-  /** Session public key (required) */
-  publicKey: PublicKey;
-}
-
-/**
- * Parameters for placing an order
- */
-export interface PlaceOrderParams {
-  /** Market ID */
-  marketId: number;
-
-  /** Order side (bid or ask) */
-  side: Side;
-
-  /** Fill mode (limit, market, etc.) */
-  fillMode: FillMode;
-
-  /** Whether the order is reduce-only */
-  isReduceOnly: boolean;
-
-  /** Order size */
-  size?: Decimal.Value;
-
-  /** Order price */
-  price?: Decimal.Value;
-
-  /** Quote size object (requires non-zero price and size) */
-  quoteSize?: QuoteSize;
-
-  /** Account ID to place the order from */
-  accountId?: number;
-
-  clientOrderId?: BigIntValue;
-}
-
-export interface AddTriggerParams {
-  marketId: number;
-  side: Side;
-  kind: TriggerKind;
-  triggerPrice: Decimal.Value;
-  limitPrice?: Decimal.Value;
-  accountId?: number;
-}
-
-export interface RemoveTriggerParams {
-  marketId: number;
-  side: Side;
-  kind: TriggerKind;
-  accountId?: number;
-}
-
-/**
- * Parameters for transferring tokens between accounts
- */
-export interface TransferParams {
-  /** Recipient user */
-  to: NordUser;
-
-  /** Token ID to transfer */
-  tokenId: number;
-
-  /** Amount to transfer */
-  amount: Decimal.Value;
-
-  /** Source account ID */
-  fromAccountId: number;
-
-  /** Destination account ID */
-  toAccountId: number;
-}
-
-/**
  * Parameters for individual atomic subactions (user-friendly version)
  */
 export interface UserAtomicSubaction {
@@ -177,7 +87,7 @@ export class NordUser {
   public publicKey: PublicKey;
   public lastTs = 0;
 
-  private actionNonce = 0;
+  private nonce = 0;
 
   /** User balances by token symbol */
   public balances: {
@@ -224,16 +134,35 @@ export class NordUser {
   /**
    * Create a new NordUser instance
    *
-   * @param params - Parameters for creating a NordUser
+   * @param nord - Nord client instance
+   * @param sessionSignFn - Function to sign messages with the user's session key
+   * @param transactionSignFn - Function to sign transactions with the user's wallet (optional)
+   * @param sessionId - Existing session identifier
+   * @param sessionPubKey - Session public key
+   * @param publicKey - Wallet public key
    * @throws {NordError} If required parameters are missing
    */
-  constructor(params: NordUserParams) {
-    this.nord = params.nord;
-    this.sessionSignFn = params.sessionSignFn;
-    this.transactionSignFn = params.transactionSignFn;
-    this.sessionId = params.sessionId;
-    this.sessionPubKey = new PublicKey(params.sessionPubKey);
-    this.publicKey = params.publicKey;
+  constructor({
+    nord,
+    sessionSignFn,
+    transactionSignFn,
+    sessionId,
+    sessionPubKey,
+    publicKey,
+  }: Readonly<{
+    nord: Nord;
+    sessionSignFn: (message: Uint8Array) => Promise<Uint8Array>;
+    transactionSignFn: (tx: Transaction) => Promise<Transaction>;
+    sessionId?: bigint;
+    sessionPubKey: Uint8Array;
+    publicKey: PublicKey;
+  }>) {
+    this.nord = nord;
+    this.sessionSignFn = sessionSignFn;
+    this.transactionSignFn = transactionSignFn;
+    this.sessionId = sessionId;
+    this.sessionPubKey = new PublicKey(sessionPubKey);
+    this.publicKey = publicKey;
 
     // Convert tokens from info endpoint to SPLTokenInfo
     if (this.nord.tokens && this.nord.tokens.length > 0) {
@@ -417,7 +346,7 @@ export class NordUser {
    * @returns Nonce as number
    */
   getNonce(): number {
-    return this.nextActionNonce();
+    return ++this.nonce;
   }
 
   private async submitSessionAction(
@@ -555,7 +484,7 @@ export class NordUser {
    */
   async refreshSession(): Promise<void> {
     const result = await createSession(
-      this.nord.webServerUrl,
+      this.nord.httpClient,
       this.transactionSignFn,
       await this.nord.getTimestamp(),
       this.getNonce(),
@@ -575,7 +504,7 @@ export class NordUser {
   async revokeSession(sessionId: BigIntValue): Promise<void> {
     try {
       await revokeSession(
-        this.nord.webServerUrl,
+        this.nord.httpClient,
         this.transactionSignFn,
         await this.nord.getTimestamp(),
         this.getNonce(),
@@ -646,29 +575,57 @@ export class NordUser {
   /**
    * Place an order on the exchange
    *
-   * @param params - Order parameters
+   * @param marketId - Target market identifier
+   * @param side - Order side
+   * @param fillMode - Fill mode (limit, market, etc.)
+   * @param isReduceOnly - Reduce-only flag
+   * @param size - Base size to place
+   * @param price - Limit price
+   * @param quoteSize - Quote-sized order representation
+   * @param accountId - Account executing the order
+   * @param clientOrderId - Optional client-specified identifier
    * @returns Object containing actionId, orderId (if posted), fills, and clientOrderId
    * @throws {NordError} If the operation fails
    */
-  async placeOrder(params: PlaceOrderParams): Promise<{
+  async placeOrder({
+    marketId,
+    side,
+    fillMode,
+    isReduceOnly,
+    size,
+    price,
+    quoteSize,
+    accountId,
+    clientOrderId,
+  }: Readonly<{
+    marketId: number;
+    side: Side;
+    fillMode: FillMode;
+    isReduceOnly: boolean;
+    size?: Decimal.Value;
+    price?: Decimal.Value;
+    quoteSize?: QuoteSize;
+    accountId?: number;
+    clientOrderId?: BigIntValue;
+  }>): Promise<{
     actionId: bigint;
     orderId?: bigint;
     fills: proto.Receipt_Trade[];
   }> {
     try {
       this.checkSessionValidity();
-      const market = findMarket(this.nord.markets, params.marketId);
+      const market = findMarket(this.nord.markets, marketId);
       if (!market) {
-        throw new NordError(`Market with ID ${params.marketId} not found`);
+        throw new NordError(`Market with ID ${marketId} not found`);
       }
       const sessionId = optExpect(this.sessionId, "No session");
-      const price = toScaledU64(params.price ?? 0, market.priceDecimals);
-      const size = toScaledU64(params.size ?? 0, market.sizeDecimals);
-      const scaledQuote = params.quoteSize
-        ? params.quoteSize.toWire(market.priceDecimals, market.sizeDecimals)
+      const scaledPrice = toScaledU64(price ?? 0, market.priceDecimals);
+      const scaledSize = toScaledU64(size ?? 0, market.sizeDecimals);
+      const scaledQuote = quoteSize
+        ? quoteSize.toWire(market.priceDecimals, market.sizeDecimals)
         : undefined;
       assert(
-        price > 0n || size > 0n || scaledQuote !== undefined,
+        scaledPrice > 0n || scaledSize > 0n || scaledQuote !== undefined,
         "OrderLimit must include at least one of: size, price, or quoteSize",
       );
 
@@ -676,13 +633,13 @@ export class NordUser {
         case: "placeOrder",
         value: create(proto.Action_PlaceOrderSchema, {
           sessionId: BigInt(sessionId),
-          senderAccountId: params.accountId,
-          marketId: params.marketId,
-          side: params.side === Side.Bid ? proto.Side.BID : proto.Side.ASK,
-          fillMode: fillModeToProtoFillMode(params.fillMode),
-          isReduceOnly: params.isReduceOnly,
-          price,
-          size,
+          senderAccountId: accountId,
+          marketId,
+          side: side === Side.Bid ? proto.Side.BID : proto.Side.ASK,
+          fillMode: fillModeToProtoFillMode(fillMode),
+          isReduceOnly,
+          price: scaledPrice,
+          size: scaledSize,
           quoteSize:
             scaledQuote === undefined
               ? undefined
@@ -691,9 +648,7 @@ export class NordUser {
                   price: scaledQuote.price,
                 }),
           clientOrderId:
-            params.clientOrderId === undefined
-              ? undefined
-              : BigInt(params.clientOrderId),
+            clientOrderId === undefined ? undefined : BigInt(clientOrderId),
         }),
       });
       expectReceiptKind(receipt, "placeOrderResult", "place order");
@@ -752,48 +707,67 @@ export class NordUser {
   /**
    * Add a trigger for the current session
    *
-   * @param params - Trigger parameters including market, side, and prices
+   * @param marketId - Market to watch
+   * @param side - Order side for the trigger
+   * @param kind - Stop-loss or take-profit trigger type
+   * @param triggerPrice - Price that activates the trigger
+   * @param limitPrice - Limit price placed once the trigger fires
+   * @param accountId - Account executing the trigger
    * @returns Object containing the actionId of the submitted trigger
    * @throws {NordError} If the operation fails
    */
-  async addTrigger(params: AddTriggerParams): Promise<{ actionId: bigint }> {
+  async addTrigger({
+    marketId,
+    side,
+    kind,
+    triggerPrice,
+    limitPrice,
+    accountId,
+  }: Readonly<{
+    marketId: number;
+    side: Side;
+    kind: TriggerKind;
+    triggerPrice: Decimal.Value;
+    limitPrice?: Decimal.Value;
+    accountId?: number;
+  }>): Promise<{ actionId: bigint }> {
     try {
       this.checkSessionValidity();
-      const market = findMarket(this.nord.markets, params.marketId);
+      const market = findMarket(this.nord.markets, marketId);
       if (!market) {
-        throw new NordError(`Market with ID ${params.marketId} not found`);
+        throw new NordError(`Market with ID ${marketId} not found`);
       }
-      const triggerPrice = toScaledU64(
-        params.triggerPrice,
+      const scaledTriggerPrice = toScaledU64(
+        triggerPrice,
         market.priceDecimals,
       );
-      assert(triggerPrice > 0n, "Trigger price must be positive");
-      const limitPrice =
-        params.limitPrice === undefined
+      assert(scaledTriggerPrice > 0n, "Trigger price must be positive");
+      const scaledLimitPrice =
+        limitPrice === undefined
           ? undefined
-          : toScaledU64(params.limitPrice, market.priceDecimals);
-      if (limitPrice !== undefined) {
-        assert(limitPrice > 0n, "Limit price must be positive");
+          : toScaledU64(limitPrice, market.priceDecimals);
+      if (scaledLimitPrice !== undefined) {
+        assert(scaledLimitPrice > 0n, "Limit price must be positive");
       }
       const key = create(proto.TriggerKeySchema, {
         kind:
-          params.kind === TriggerKind.StopLoss
+          kind === TriggerKind.StopLoss
             ? proto.TriggerKind.STOP_LOSS
             : proto.TriggerKind.TAKE_PROFIT,
-        side: params.side === Side.Bid ? proto.Side.BID : proto.Side.ASK,
+        side: side === Side.Bid ? proto.Side.BID : proto.Side.ASK,
       });
       const prices = create(proto.Action_TriggerPricesSchema, {
-        triggerPrice,
-        limitPrice,
+        triggerPrice: scaledTriggerPrice,
+        limitPrice: scaledLimitPrice,
       });
       const receipt = await this.submitSessionAction({
         case: "addTrigger",
         value: create(proto.Action_AddTriggerSchema, {
           sessionId: BigInt(optExpect(this.sessionId, "No session")),
-          marketId: params.marketId,
+          marketId,
           key,
           prices,
-          accountId: params.accountId,
+          accountId,
         }),
       });
       expectReceiptKind(receipt, "triggerAdded", "add trigger");
@@ -806,33 +780,44 @@ export class NordUser {
   /**
    * Remove a trigger for the current session
    *
-   * @param params - Trigger parameters identifying the trigger to remove
+   * @param marketId - Market the trigger belongs to
+   * @param side - Order side for the trigger
+   * @param kind - Stop-loss or take-profit trigger type
+   * @param accountId - Account executing the trigger
    * @returns Object containing the actionId of the removal action
    * @throws {NordError} If the operation fails
    */
-  async removeTrigger(
-    params: RemoveTriggerParams,
-  ): Promise<{ actionId: bigint }> {
+  async removeTrigger({
+    marketId,
+    side,
+    kind,
+    accountId,
+  }: Readonly<{
+    marketId: number;
+    side: Side;
+    kind: TriggerKind;
+    accountId?: number;
+  }>): Promise<{ actionId: bigint }> {
     try {
       this.checkSessionValidity();
-      const market = findMarket(this.nord.markets, params.marketId);
+      const market = findMarket(this.nord.markets, marketId);
       if (!market) {
-        throw new NordError(`Market with ID ${params.marketId} not found`);
+        throw new NordError(`Market with ID ${marketId} not found`);
       }
       const key = create(proto.TriggerKeySchema, {
         kind:
-          params.kind === TriggerKind.StopLoss
+          kind === TriggerKind.StopLoss
             ? proto.TriggerKind.STOP_LOSS
             : proto.TriggerKind.TAKE_PROFIT,
-        side: params.side === Side.Bid ? proto.Side.BID : proto.Side.ASK,
+        side: side === Side.Bid ? proto.Side.BID : proto.Side.ASK,
       });
       const receipt = await this.submitSessionAction({
         case: "removeTrigger",
         value: create(proto.Action_RemoveTriggerSchema, {
           sessionId: BigInt(optExpect(this.sessionId, "No session")),
-          marketId: params.marketId,
+          marketId,
           key,
-          accountId: params.accountId,
+          accountId,
         }),
       });
       expectReceiptKind(receipt, "triggerRemoved", "remove trigger");
@@ -845,16 +830,29 @@ export class NordUser {
   /**
    * Transfer tokens to another account
    *
-   * @param params - Transfer parameters
+   * @param tokenId - Token identifier to move
+   * @param amount - Amount to transfer
+   * @param fromAccountId - Source account id
+   * @param toAccountId - Destination account id
    * @throws {NordError} If the operation fails
    */
-  async transferToAccount(params: TransferParams): Promise<void> {
+  async transferToAccount({
+    tokenId,
+    amount,
+    fromAccountId,
+    toAccountId,
+  }: Readonly<{
+    tokenId: number;
+    amount: Decimal.Value;
+    fromAccountId?: number;
+    toAccountId?: number;
+  }>): Promise<void> {
     try {
       this.checkSessionValidity();
-      const token = findToken(this.nord.tokens, params.tokenId);
+      const token = findToken(this.nord.tokens, tokenId);
 
-      const amount = toScaledU64(params.amount, token.decimals);
-      if (amount <= 0n) {
+      const scaledAmount = toScaledU64(amount, token.decimals);
+      if (scaledAmount <= 0n) {
         throw new NordError("Transfer amount must be positive");
       }
 
@@ -862,10 +860,10 @@ export class NordUser {
         case: "transfer",
         value: create(proto.Action_TransferSchema, {
           sessionId: BigInt(optExpect(this.sessionId, "No session")),
-          fromAccountId: optExpect(params.fromAccountId, "No source account"),
-          toAccountId: optExpect(params.toAccountId, "No target account"),
-          tokenId: params.tokenId,
-          amount,
+          fromAccountId: optExpect(fromAccountId, "No source account"),
+          toAccountId: optExpect(toAccountId, "No target account"),
+          tokenId,
+          amount: scaledAmount,
         }),
       });
       expectReceiptKind(receipt, "transferred", "transfer tokens");
@@ -932,7 +930,7 @@ export class NordUser {
       });
 
       const result = await atomic(
-        this.nord.webServerUrl,
+        this.nord.httpClient,
         this.sessionSignFn,
         await this.nord.getTimestamp(),
         this.getNonce(),
@@ -1101,13 +1099,9 @@ export class NordUser {
     kind: proto.Action["kind"],
     makeSignedMessage: (message: Uint8Array) => Promise<Uint8Array>,
   ): Promise<proto.Receipt> {
-    const nonce = this.nextActionNonce();
+    const nonce = this.getNonce();
     const currentTimestamp = await this.nord.getTimestamp();
     const action = createAction(currentTimestamp, nonce, kind);
-    return sendAction(this.nord.webServerUrl, makeSignedMessage, action);
-  }
-
-  protected nextActionNonce(): number {
-    return ++this.actionNonce;
+    return sendAction(this.nord.httpClient, makeSignedMessage, action);
   }
 }

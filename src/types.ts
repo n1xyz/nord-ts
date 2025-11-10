@@ -179,18 +179,6 @@ export interface ActionResponse {
 }
 
 /**
- * Block summary.
- * block_number Block number.
- * from_action_id First action_id in the block.
- * to_action_id Last action_id in the block.
- */
-export interface BlockSummary {
-  block_number: number;
-  from_action_id: number;
-  to_action_id: number;
-}
-
-/**
  * Converts a `FillMode` enum to its corresponding protobuf representation.
  *
  * @param x - The fill mode to convert.
@@ -223,7 +211,7 @@ export interface OrderbookEntry {
  */
 export interface OrderbookQuery {
   symbol?: string;
-  market_id?: number;
+  marketId?: number;
 }
 
 /**

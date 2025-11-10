@@ -17,77 +17,6 @@ export enum AclRole {
 }
 
 /**
- * Parameters required to register a new token via the admin API.
- */
-export interface CreateTokenParams {
-  tokenDecimals: number;
-  weightBps: number;
-  viewSymbol: string;
-  oracleSymbol: string;
-  mintAddr: PublicKey;
-}
-
-/**
- * Parameters used when creating a new market.
- */
-export interface CreateMarketParams {
-  sizeDecimals: number;
-  priceDecimals: number;
-  imfBps: number;
-  cmfBps: number;
-  mmfBps: number;
-  marketType: proto.MarketType;
-  viewSymbol: string;
-  oracleSymbol: string;
-  baseTokenId: number;
-}
-
-/**
- * Configuration for updating the Wormhole guardian set on the oracle.
- */
-export interface PythSetWormholeGuardiansParams {
-  guardianSetIndex: number;
-  addresses: string[];
-}
-
-/**
- * Parameters required to link an oracle symbol to a Pyth price feed.
- */
-export interface PythSetSymbolFeedParams {
-  oracleSymbol: string;
-  priceFeedId: string;
-}
-
-/**
- * Identifies a market that should be frozen.
- */
-export interface FreezeMarketParams {
-  marketId: number;
-}
-
-/**
- * Identifies a market that should be unfrozen.
- */
-export interface UnfreezeMarketParams {
-  marketId: number;
-}
-
-/**
- * Parameters for adding a new fee tier.
- */
-export interface AddFeeTierParams {
-  config: FeeTierConfig;
-}
-
-/**
- * Parameters for updating an existing fee tier.
- */
-export interface UpdateFeeTierParams {
-  tierId: number;
-  config: FeeTierConfig;
-}
-
-/**
  * Administrative client capable of submitting privileged configuration actions.
  */
 export class NordAdmin {
@@ -143,7 +72,7 @@ export class NordAdmin {
     const timestamp = await this.nord.getTimestamp();
     const action = createAction(timestamp, 0, kind);
     return sendAction(
-      this.nord.webServerUrl,
+      this.nord.httpClient,
       async (xs: Uint8Array) => {
         const signature = await signUserPayload({
           payload: xs,
@@ -204,7 +133,11 @@ export class NordAdmin {
   /**
    * Register a new token that can be listed on Nord.
    *
-   * @param params - Token configuration values
+   * @param tokenDecimals - Decimal shift used when parsing deposits/withdrawals
+   * @param weightBps - Risk weight in basis points applied in account value calculations
+   * @param viewSymbol - Symbol surfaced to Nord clients
+   * @param oracleSymbol - Symbol resolved by the oracle adapter
+   * @param mintAddr - Solana mint backing this token
    * @returns Action identifier and resulting token metadata
    * @throws {NordError} If the action submission fails
    */
@@ -214,9 +147,13 @@ export class NordAdmin {
     viewSymbol,
     oracleSymbol,
     mintAddr,
-  }: CreateTokenParams): Promise<
-    { actionId: bigint } & proto.Receipt_InsertTokenResult
-  > {
+  }: Readonly<{
+    tokenDecimals: number;
+    weightBps: number;
+    viewSymbol: string;
+    oracleSymbol: string;
+    mintAddr: PublicKey;
+  }>): Promise<{ actionId: bigint } & proto.Receipt_InsertTokenResult> {
     const receipt = await this.submitAction({
       case: "createToken",
       value: create(proto.Action_CreateTokenSchema, {
@@ -235,26 +172,52 @@ export class NordAdmin {
   /**
    * Open a new market with the provided trading parameters.
    *
-   * @param params - Market configuration to apply
+   * @param sizeDecimals - Decimal shift for contract sizes
+   * @param priceDecimals - Decimal shift for price ticks
+   * @param imfBps - Base initial margin fraction (IMF) in basis points, see docs/MARKETS.md
+   * @param cmfBps - Cancel margin fraction (CMF) in basis points, see docs/MARKETS.md
+   * @param mmfBps - Maintenance margin fraction (MMF) in basis points, see docs/MARKETS.md
+   * @param marketType - Spot or perpetual market type
+   * @param viewSymbol - Symbol exposed to Nord clients
+   * @param oracleSymbol - Symbol resolved by the oracle adapter
+   * @param baseTokenId - Registered base token backing this market
    * @returns Action identifier and resulting market metadata
    * @throws {NordError} If the action submission fails
    */
-  async createMarket(
-    params: CreateMarketParams,
-  ): Promise<{ actionId: bigint } & proto.Receipt_InsertMarketResult> {
+  async createMarket({
+    sizeDecimals,
+    priceDecimals,
+    imfBps,
+    cmfBps,
+    mmfBps,
+    marketType,
+    viewSymbol,
+    oracleSymbol,
+    baseTokenId,
+  }: Readonly<{
+    sizeDecimals: number;
+    priceDecimals: number;
+    imfBps: number;
+    cmfBps: number;
+    mmfBps: number;
+    marketType: proto.MarketType;
+    viewSymbol: string;
+    oracleSymbol: string;
+    baseTokenId: number;
+  }>): Promise<{ actionId: bigint } & proto.Receipt_InsertMarketResult> {
     const receipt = await this.submitAction({
       case: "createMarket",
       value: create(proto.Action_CreateMarketSchema, {
         aclPubkey: this.admin.toBytes(),
-        sizeDecimals: params.sizeDecimals,
-        priceDecimals: params.priceDecimals,
-        imfBps: params.imfBps,
-        cmfBps: params.cmfBps,
-        mmfBps: params.mmfBps,
-        marketType: params.marketType,
-        viewSymbol: params.viewSymbol,
-        oracleSymbol: params.oracleSymbol,
-        baseTokenId: params.baseTokenId,
+        sizeDecimals,
+        priceDecimals,
+        imfBps,
+        cmfBps,
+        mmfBps,
+        marketType,
+        viewSymbol,
+        oracleSymbol,
+        baseTokenId,
       }),
     });
     expectReceiptKind(receipt, "insertMarketResult", "create market");
@@ -268,14 +231,19 @@ export class NordAdmin {
    * leading `0x` prefix). The engine validates the supplied guardian set index
    * before applying the update.
    *
-   * @param params - Guardian set index and guardian addresses
+   * @param guardianSetIndex - Wormhole guardian set index that must already exist
+   * @param addresses - 20-byte hex-encoded guardian addresses
    * @returns Action identifier and guardian update receipt
    * @throws {NordError} If the action submission fails
    */
-  async pythSetWormholeGuardians(
-    params: PythSetWormholeGuardiansParams,
-  ): Promise<{ actionId: bigint } & proto.Receipt_UpdateGuardianSetResult> {
-    const addresses = params.addresses.map((address) => {
+  async pythSetWormholeGuardians({
+    guardianSetIndex,
+    addresses,
+  }: Readonly<{
+    guardianSetIndex: number;
+    addresses: readonly string[];
+  }>): Promise<{ actionId: bigint } & proto.Receipt_UpdateGuardianSetResult> {
+    const parsedAddresses = addresses.map((address) => {
       try {
         const decoded = decodeHex(address);
         if (decoded.length !== 20) {
@@ -294,8 +262,8 @@ export class NordAdmin {
       case: "pythSetWormholeGuardians",
       value: create(proto.Action_PythSetWormholeGuardiansSchema, {
         aclPubkey: this.admin.toBytes(),
-        guardianSetIndex: params.guardianSetIndex,
-        addresses,
+        guardianSetIndex,
+        addresses: parsedAddresses,
       }),
     });
     expectReceiptKind(
@@ -313,16 +281,21 @@ export class NordAdmin {
    * leading `0x` prefix). Use this call to create or update the mapping used
    * by the oracle integration.
    *
-   * @param params - Oracle symbol and price feed identifier
+   * @param oracleSymbol - Symbol resolved by the oracle adapter
+   * @param priceFeedId - 32-byte hex-encoded Pyth price feed identifier
    * @returns Action identifier and symbol feed receipt
    * @throws {NordError} If the action submission fails
    */
-  async pythSetSymbolFeed(
-    params: PythSetSymbolFeedParams,
-  ): Promise<{ actionId: bigint } & proto.Receipt_OracleSymbolFeedResult> {
+  async pythSetSymbolFeed({
+    oracleSymbol,
+    priceFeedId: priceFeedIdHex,
+  }: Readonly<{
+    oracleSymbol: string;
+    priceFeedId: string;
+  }>): Promise<{ actionId: bigint } & proto.Receipt_OracleSymbolFeedResult> {
     let priceFeedId: Uint8Array;
     try {
-      priceFeedId = decodeHex(params.priceFeedId);
+      priceFeedId = decodeHex(priceFeedIdHex);
       if (priceFeedId.length !== 32) {
         throw new Error("price feed id must be 32 bytes");
       }
@@ -336,7 +309,7 @@ export class NordAdmin {
       case: "pythSetSymbolFeed",
       value: create(proto.Action_PythSetSymbolFeedSchema, {
         aclPubkey: this.admin.toBytes(),
-        oracleSymbol: params.oracleSymbol,
+        oracleSymbol,
         priceFeedId,
       }),
     });
@@ -381,17 +354,19 @@ export class NordAdmin {
   /**
    * Freeze an individual market, preventing new trades and orders.
    *
-   * @param params - Target market identifier
+   * @param marketId - Target market identifier
    * @returns Action identifier and freeze receipt
    * @throws {NordError} If the action submission fails
    */
-  async freezeMarket(
-    params: FreezeMarketParams,
-  ): Promise<{ actionId: bigint } & proto.Receipt_MarketFreezeUpdated> {
+  async freezeMarket({
+    marketId,
+  }: Readonly<{
+    marketId: number;
+  }>): Promise<{ actionId: bigint } & proto.Receipt_MarketFreezeUpdated> {
     const receipt = await this.submitAction({
       case: "freezeMarket",
       value: create(proto.Action_FreezeMarketSchema, {
-        marketId: params.marketId,
+        marketId,
         aclPubkey: this.admin.toBytes(),
       }),
     });
@@ -402,17 +377,19 @@ export class NordAdmin {
   /**
    * Unfreeze a market that was previously halted.
    *
-   * @param params - Target market identifier
+   * @param marketId - Target market identifier
    * @returns Action identifier and freeze receipt
    * @throws {NordError} If the action submission fails
    */
-  async unfreezeMarket(
-    params: UnfreezeMarketParams,
-  ): Promise<{ actionId: bigint } & proto.Receipt_MarketFreezeUpdated> {
+  async unfreezeMarket({
+    marketId,
+  }: Readonly<{
+    marketId: number;
+  }>): Promise<{ actionId: bigint } & proto.Receipt_MarketFreezeUpdated> {
     const receipt = await this.submitAction({
       case: "unfreezeMarket",
       value: create(proto.Action_UnfreezeMarketSchema, {
-        marketId: params.marketId,
+        marketId,
         aclPubkey: this.admin.toBytes(),
       }),
     });
@@ -427,18 +404,20 @@ export class NordAdmin {
    *   the default Nord fees; use `updateFeeTier` if you need to change it.
    * - The first appended tier receives id 1, and subsequent tiers increment the id.
    *
-   * @param params - Fee tier configuration to insert
+   * @param config - Fee tier configuration to insert
    * @returns Action identifier and fee tier addition receipt
    * @throws {NordError} If the action submission fails or the new tier exceeds the maximum range (0-15).
    */
-  async addFeeTier(
-    params: AddFeeTierParams,
-  ): Promise<{ actionId: bigint } & proto.Receipt_FeeTierAdded> {
+  async addFeeTier({
+    config,
+  }: Readonly<{
+    config: FeeTierConfig;
+  }>): Promise<{ actionId: bigint } & proto.Receipt_FeeTierAdded> {
     const receipt = await this.submitAction({
       case: "addFeeTier",
       value: create(proto.Action_AddFeeTierSchema, {
         aclPubkey: this.admin.toBytes(),
-        config: create(proto.FeeTierConfigSchema, params.config),
+        config: create(proto.FeeTierConfigSchema, config),
       }),
     });
     expectReceiptKind(receipt, "feeTierAdded", "add fee tier");
@@ -451,19 +430,24 @@ export class NordAdmin {
    * Tier identifiers must already exist; attempting to update a missing tier
    * causes the action to fail.
    *
-   * @param params - Fee tier identifier and updated configuration
+   * @param tierId - Existing fee tier identifier to update
+   * @param config - Replacement configuration for the tier
    * @returns Action identifier and fee tier update receipt
    * @throws {NordError} If the action submission fails or the tier ID exceeds the configured range.
    */
-  async updateFeeTier(
-    params: UpdateFeeTierParams,
-  ): Promise<{ actionId: bigint } & proto.Receipt_FeeTierUpdated> {
+  async updateFeeTier({
+    tierId,
+    config,
+  }: Readonly<{
+    tierId: number;
+    config: FeeTierConfig;
+  }>): Promise<{ actionId: bigint } & proto.Receipt_FeeTierUpdated> {
     const receipt = await this.submitAction({
       case: "updateFeeTier",
       value: create(proto.Action_UpdateFeeTierSchema, {
         aclPubkey: this.admin.toBytes(),
-        id: params.tierId,
-        config: create(proto.FeeTierConfigSchema, params.config),
+        id: tierId,
+        config: create(proto.FeeTierConfigSchema, config),
       }),
     });
     expectReceiptKind(receipt, "feeTierUpdated", "update fee tier");

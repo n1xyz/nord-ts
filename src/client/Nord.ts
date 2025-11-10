@@ -48,18 +48,6 @@ export interface UserSubscription extends EventEmitter {
 }
 
 /**
- * WebSocket subscription options interface
- */
-export interface WebSocketSubscriptionOptions {
-  /** Market symbols to subscribe to for trade updates */
-  trades?: string[];
-  /** Market symbols to subscribe to for orderbook delta updates */
-  deltas?: string[];
-  /** Account IDs to subscribe to for account updates */
-  accounts?: number[];
-}
-
-/**
  * Main Nord client class for interacting with the Nord API
  */
 export class Nord {
@@ -82,7 +70,7 @@ export class Nord {
   public protonClient: ProtonClient;
 
   /** HTTP client for Nord operations */
-  private httpClient: Client<paths>;
+  public readonly httpClient: Client<paths>;
 
   /**
    * Create a new Nord client
@@ -110,7 +98,9 @@ export class Nord {
   /**
    * Create a WebSocket client with specific subscriptions
    *
-   * @param options - Subscription options that specify which data streams to subscribe to
+   * @param trades - Market symbols to subscribe to for trade updates
+   * @param deltas - Market symbols to subscribe to for orderbook delta updates
+   * @param accounts - Account IDs to subscribe to for account updates
    * @returns A new WebSocket client with the requested subscriptions
    * @throws {NordError} If invalid subscription options are provided
    *
@@ -128,28 +118,34 @@ export class Nord {
    *   trades: ["BTCUSDC", "ETHUSDC"]
    * });
    */
-  public createWebSocketClient(
-    options: WebSocketSubscriptionOptions,
-  ): NordWebSocketClient {
+  public createWebSocketClient({
+    trades,
+    deltas,
+    accounts,
+  }: Readonly<{
+    trades?: string[];
+    deltas?: string[];
+    accounts?: number[];
+  }>): NordWebSocketClient {
     const subscriptions: SubscriptionPattern[] = [];
 
     // Add trade subscriptions
-    if (options.trades && options.trades.length > 0) {
-      options.trades.forEach((symbol) => {
+    if (trades && trades.length > 0) {
+      trades.forEach((symbol) => {
         subscriptions.push(`trades@${symbol}` as SubscriptionPattern);
       });
     }
 
     // Add delta subscriptions
-    if (options.deltas && options.deltas.length > 0) {
-      options.deltas.forEach((symbol) => {
+    if (deltas && deltas.length > 0) {
+      deltas.forEach((symbol) => {
         subscriptions.push(`deltas@${symbol}` as SubscriptionPattern);
       });
     }
 
     // Add account subscriptions
-    if (options.accounts && options.accounts.length > 0) {
-      options.accounts.forEach((accountId) => {
+    if (accounts && accounts.length > 0) {
+      accounts.forEach((accountId) => {
         if (isNaN(accountId) || accountId <= 0) {
           throw new NordError(
             `Invalid account ID: ${accountId}. Must be a positive number.`,
@@ -281,20 +277,20 @@ export class Nord {
   /**
    * Query a specific action
    *
-   * @param query - Action query parameters
+   * @param actionId - Action identifier to fetch
    * @returns Action response
    * @throws {NordError} If the request fails
    */
   async queryAction({
-    action_id,
-  }: {
-    action_id: number;
-  }): Promise<ActionResponse | null> {
+    actionId,
+  }: Readonly<{
+    actionId: number;
+  }>): Promise<ActionResponse | null> {
     return (
       (
         await this.queryRecentActions({
-          from: action_id,
-          to: action_id,
+          from: actionId,
+          to: actionId,
         })
       )[0] ?? null
     );
@@ -303,18 +299,21 @@ export class Nord {
   /**
    * Query recent actions
    *
-   * @param from - Starting action index
-   * @param to - Ending action index
+   * @param from - Starting action index (inclusive)
+   * @param to - Ending action index (inclusive)
    * @returns Actions response
    * @throws {NordError} If the request fails
    */
-  async queryRecentActions(query: {
+  async queryRecentActions({
+    from,
+    to,
+  }: Readonly<{
     from: number;
     to: number;
-  }): Promise<ActionResponse[]> {
+  }>): Promise<ActionResponse[]> {
     const xs = await this.GET("/action", {
       params: {
-        query,
+        query: { from, to },
       },
     });
     return xs.map((x) => ({
@@ -457,39 +456,53 @@ export class Nord {
   /**
    * Get trades for a market
    *
-   * @param query - Trades query parameters
+   * @param marketId - Market identifier to filter by
+   * @param takerId - Taker account identifier
+   * @param makerId - Maker account identifier
+   * @param takerSide - Side executed by the taker
+   * @param pageSize - Maximum number of trades to return
+   * @param since - RFC3339 timestamp to start from (inclusive)
+   * @param until - RFC3339 timestamp to end at (exclusive)
+   * @param pageId - Pagination cursor returned from a prior call
    * @returns Trades response
    * @throws {NordError} If the request fails
    */
-  public async getTrades(
-    query: Readonly<{
-      marketId?: number;
-      takerId?: number;
-      makerId?: number;
-      takerSide?: "bid" | "ask";
-      pageSize?: number;
-      sinceRcf3339?: string;
-      untilRfc3339?: string;
-      pageId?: string;
-    }>,
-  ): Promise<TradesResponse> {
-    if (query.sinceRcf3339 && !utils.isRfc3339(query.sinceRcf3339)) {
-      throw new NordError(`Invalid RFC3339 timestamp: ${query.sinceRcf3339}`);
+  public async getTrades({
+    marketId,
+    takerId,
+    makerId,
+    takerSide,
+    pageSize,
+    since,
+    until,
+    startInclusive,
+  }: Readonly<{
+    marketId?: number;
+    takerId?: number;
+    makerId?: number;
+    takerSide?: "bid" | "ask";
+    pageSize?: number;
+    since?: string;
+    until?: string;
+    startInclusive?: string;
+  }>): Promise<TradesResponse> {
+    if (since && !utils.isRfc3339(since)) {
+      throw new NordError(`Invalid RFC3339 timestamp: ${since}`);
     }
-    if (query.untilRfc3339 && !utils.isRfc3339(query.untilRfc3339)) {
-      throw new NordError(`Invalid RFC3339 timestamp: ${query.untilRfc3339}`);
+    if (until && !utils.isRfc3339(until)) {
+      throw new NordError(`Invalid RFC3339 timestamp: ${until}`);
     }
     return await this.GET("/trades", {
       params: {
         query: {
-          takerId: query.takerId,
-          makerId: query.makerId,
-          marketId: query.marketId,
-          pageSize: query.pageSize,
-          takerSide: query.takerSide,
-          since: query.sinceRcf3339,
-          until: query.untilRfc3339,
-          startInclusive: query.pageId,
+          takerId,
+          makerId,
+          marketId,
+          pageSize,
+          takerSide,
+          since,
+          until,
+          startInclusive,
         },
       },
     });
@@ -498,16 +511,18 @@ export class Nord {
   /**
    * Get user account IDs
    *
-   * @param query - User account IDs query parameters
+   * @param pubkey - User public key to query
    * @returns User account IDs response
    * @throws {NordError} If the request fails
    */
-  public async getUser(query: {
+  public async getUser({
+    pubkey,
+  }: Readonly<{
     pubkey: string | PublicKey;
-  }): Promise<User | null> {
+  }>): Promise<User | null> {
     const r = await this.httpClient.GET("/user/{pubkey}", {
       params: {
-        path: { pubkey: query.pubkey.toString() },
+        path: { pubkey: pubkey.toString() },
       },
     });
     if (r.response.status === 404) {
@@ -519,28 +534,32 @@ export class Nord {
   /**
    * Get orderbook for a market
    *
-   * @param query - Orderbook query parameters (either market_id or symbol must be provided)
+   * @param symbol - Market symbol to resolve into an id
+   * @param marketId - Market identifier
    * @returns Orderbook response
    * @throws {NordError} If the request fails or if the market symbol is unknown
    * @remarks It's recommended to initialize the Nord client using the static `initNord` method
    * to ensure market information is properly loaded before calling this method.
    */
-  public async getOrderbook(query: OrderbookQuery): Promise<OrderbookResponse> {
+  public async getOrderbook({
+    symbol,
+    marketId,
+  }: OrderbookQuery): Promise<OrderbookResponse> {
     // If only symbol is provided, convert it to market_id
-    let marketId: number;
-    if (query.symbol && query.market_id === undefined) {
+    let _marketId: number;
+    if (symbol && marketId === undefined) {
       // If the map is empty, try to fetch market information first
       if (this.symbolToMarketId.size === 0) {
         await this.fetchNordInfo();
       }
 
-      const id = this.symbolToMarketId.get(query.symbol);
+      const id = this.symbolToMarketId.get(symbol);
       if (id === undefined) {
-        throw new NordError(`Unknown market symbol: ${query.symbol}`);
+        throw new NordError(`Unknown market symbol: ${symbol}`);
       }
-      marketId = id;
-    } else if (query.market_id !== undefined) {
-      marketId = query.market_id;
+      _marketId = id;
+    } else if (marketId !== undefined) {
+      _marketId = marketId;
     } else {
       throw new NordError(
         "Either symbol or market_id must be provided for orderbook query",
@@ -549,7 +568,7 @@ export class Nord {
 
     return await this.GET("/market/{market_id}/orderbook", {
       params: {
-        path: { market_id: marketId },
+        path: { market_id: _marketId },
       },
     });
   }
@@ -638,20 +657,27 @@ export class Nord {
    * Get open orders for an account.
    *
    * @param accountId - Account id to query
-   * @param query - Optional pagination parameters
+   * @param startInclusive - Pagination cursor (client order id) to resume from
+   * @param pageSize - Maximum number of orders to return
    * @returns Page of orders keyed by client order id
    * @throws {NordError} If the request fails
    */
   public async getAccountOrders(
     accountId: number,
-    query?: { startInclusive?: string | null; pageSize?: number | null },
+    {
+      startInclusive,
+      pageSize,
+    }: Readonly<{
+      startInclusive?: string | null;
+      pageSize?: number | null;
+    }> = {},
   ): Promise<PageResultStringOrderInfo> {
     return await this.GET("/account/{account_id}/orders", {
       params: {
         path: { account_id: accountId },
         query: {
-          startInclusive: query?.startInclusive,
-          pageSize: query?.pageSize,
+          startInclusive,
+          pageSize,
         },
       },
     });
@@ -659,16 +685,22 @@ export class Nord {
 
   /**
    * List account fee tiers with pagination support.
+   *
+   * @param startInclusive - Account id cursor to resume from
+   * @param pageSize - Maximum number of entries to return
    */
-  public async getAccountsFeeTiers(query?: {
+  public async getAccountsFeeTiers({
+    startInclusive,
+    pageSize,
+  }: Readonly<{
     startInclusive?: number | null;
     pageSize?: number | null;
-  }): Promise<AccountFeeTierPage> {
+  }> = {}): Promise<AccountFeeTierPage> {
     return await this.GET("/accounts/fee-tiers", {
       params: {
         query: {
-          startInclusive: query?.startInclusive ?? undefined,
-          pageSize: query?.pageSize ?? undefined,
+          startInclusive: startInclusive ?? undefined,
+          pageSize: pageSize ?? undefined,
         },
       },
     });
@@ -678,22 +710,30 @@ export class Nord {
    * Get profit and loss history for an account
    *
    * @param accountId - Account ID to query
-   * @param query - Optional time and pagination filters
+   * @param since - RFC3339 timestamp to start from (inclusive)
+   * @param until - RFC3339 timestamp to end at (exclusive)
+   * @param startInclusive - Pagination cursor to resume from
+   * @param pageSize - Maximum number of entries to return
    * @returns Page of PnL entries ordered from latest to oldest
    * @throws {NordError} If the request fails
    */
   public async getAccountPnl(
     accountId: number,
-    query?: Partial<AccountPnlQuery>,
+    {
+      since,
+      until,
+      startInclusive,
+      pageSize,
+    }: Readonly<Partial<AccountPnlQuery>> = {},
   ): Promise<AccountPnlPage> {
     return await this.GET("/account/{account_id}/pnl", {
       params: {
         path: { account_id: accountId },
         query: {
-          since: query?.since,
-          until: query?.until,
-          startInclusive: query?.startInclusive,
-          pageSize: query?.pageSize,
+          since,
+          until,
+          startInclusive,
+          pageSize,
         },
       },
     });
@@ -702,13 +742,16 @@ export class Nord {
   /**
    * Get market statistics (alias for marketsStats for backward compatibility)
    *
+   *
+   * @param marketId - Market identifier
+   *
    * @returns Market statistics response
    */
   public async getMarketStats({
     marketId,
-  }: {
+  }: Readonly<{
     marketId: number;
-  }): Promise<MarketStats> {
+  }>): Promise<MarketStats> {
     return await this.GET("/market/{market_id}/stats", {
       params: {
         path: { market_id: marketId },
@@ -719,7 +762,9 @@ export class Nord {
   /**
    * Fetch the per-market fee quote for an account.
    *
-   * @param params - Market id, fee kind, and account id to quote
+   * @param marketId - Market identifier
+   * @param feeKind - Fill role (maker/taker) to quote
+   * @param accountId - Account identifier to quote
    * @returns Fee in quote token units (negative means fee is charged)
    * @throws {NordError} If the request fails
    */
@@ -727,11 +772,11 @@ export class Nord {
     marketId,
     feeKind,
     accountId,
-  }: {
+  }: Readonly<{
     marketId: number;
     feeKind: FillRole;
     accountId: number;
-  }): Promise<number> {
+  }>): Promise<number> {
     return await this.GET("/market/{market_id}/fees/{fee_kind}/{account_id}", {
       params: {
         path: {
@@ -777,20 +822,27 @@ export class Nord {
    * Get trade history for a specific order.
    *
    * @param orderId - Order identifier
-   * @param query - Optional pagination parameters
+   * @param startInclusive - Trade pagination cursor
+   * @param pageSize - Maximum number of trades to return
    * @returns Page of trades associated with the order
    * @throws {NordError} If the request fails
    */
   public async getOrderTrades(
     orderId: string,
-    query?: { startInclusive?: string | null; pageSize?: number | null },
+    {
+      startInclusive,
+      pageSize,
+    }: Readonly<{
+      startInclusive?: string | null;
+      pageSize?: number | null;
+    }> = {},
   ): Promise<PageResultStringTrade> {
     return await this.GET("/order/{order_id}/trades", {
       params: {
         path: { order_id: orderId },
         query: {
-          startInclusive: query?.startInclusive,
-          pageSize: query?.pageSize,
+          startInclusive,
+          pageSize,
         },
       },
     });
@@ -810,14 +862,14 @@ export class Nord {
   /**
    * Fetch active triggers for an account.
    *
-   * @param params Optional parameters containing an explicit account id.
+   * @param accountId - Account identifier owning the triggers
    * @throws {NordError} If no account can be resolved or the request fails.
    */
-  async getAccountTriggers(params?: {
+  async getAccountTriggers({
+    accountId,
+  }: Readonly<{
     accountId?: number;
-  }): Promise<AccountTriggerInfo[]> {
-    const accountId = params?.accountId;
-
+  }> = {}): Promise<AccountTriggerInfo[]> {
     if (accountId == null) {
       throw new NordError(
         "Account ID is undefined. Make sure to call updateAccountId() before requesting triggers.",
@@ -839,30 +891,37 @@ export class Nord {
   /**
    * Fetch trigger history for an account.
    *
-   * @param params Optional parameters with account id and history query filters.
+   * @param accountId - Account identifier owning the triggers
+   * @param since - RFC3339 timestamp to start from (inclusive)
+   * @param until - RFC3339 timestamp to end at (exclusive)
+   * @param pageSize - Maximum number of entries to return
+   * @param startInclusive - Pagination cursor to resume from
    * @throws {NordError} If no account can be resolved or the request fails.
    */
-  async getAccountTriggerHistory(
-    params: HistoryTriggerQuery & { accountId?: number },
-  ): Promise<TriggerHistoryPage> {
-    const accountId = params?.accountId;
-
+  async getAccountTriggerHistory({
+    accountId,
+    since,
+    until,
+    pageSize,
+    startInclusive,
+  }: Readonly<
+    HistoryTriggerQuery & { accountId?: number }
+  >): Promise<TriggerHistoryPage> {
     if (accountId == null) {
       throw new NordError(
         "Account ID is undefined. Make sure to call updateAccountId() before requesting trigger history.",
       );
     }
 
-    const { accountId: _, ...query } = params;
     try {
       return await this.GET("/account/{account_id}/triggers/history", {
         params: {
           path: { account_id: accountId },
           query: {
-            since: query.since,
-            until: query.until,
-            pageSize: query.pageSize,
-            startInclusive: query.startInclusive,
+            since,
+            until,
+            pageSize,
+            startInclusive,
           },
         },
       });
