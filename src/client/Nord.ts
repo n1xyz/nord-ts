@@ -205,6 +205,16 @@ export class Nord {
   }
 
   /**
+   * Get the admin list from the Nord server
+   *
+   * @returns List of admin registration keys paired with their ACL role mask
+   * @throws {NordError} If the request fails
+   */
+  async getAdminList(): Promise<Array<[string, number]>> {
+    return await this.GET("/admin", {});
+  }
+
+  /**
    * Fetch information about Nord markets and tokens
    *
    * @throws {NordError} If the request fails
