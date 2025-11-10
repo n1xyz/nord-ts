@@ -846,7 +846,10 @@ export class NordUser {
     amount: Decimal.Value;
     fromAccountId?: number;
     toAccountId?: number;
-  }>): Promise<void> {
+  }>): Promise<{
+    actionId: bigint;
+    newAccountId?: number;
+  }> {
     try {
       this.checkSessionValidity();
       const token = findToken(this.nord.tokens, tokenId);
@@ -867,6 +870,18 @@ export class NordUser {
         }),
       });
       expectReceiptKind(receipt, "transferred", "transfer tokens");
+      if (receipt.kind.value.accountCreated) {
+        assert(
+          receipt.kind.value.toUserAccount !== undefined,
+          `toAccount must be defined on new account on ${receipt.kind.value}`,
+        );
+        return {
+          actionId: receipt.actionId,
+          newAccountId: receipt.kind.value.toUserAccount,
+        };
+      } else {
+        return { actionId: receipt.actionId };
+      }
     } catch (error) {
       throw new NordError("Failed to transfer tokens", { cause: error });
     }
