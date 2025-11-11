@@ -31,6 +31,8 @@ import {
   TokenStats,
   FillRole,
   AdminInfo,
+  AccountVolumeInfo,
+  GetAccountVolumeQuery,
 } from "../types";
 import * as utils from "../utils";
 import { NordWebSocketClient } from "../websocket/index";
@@ -209,6 +211,34 @@ export class Nord {
    */
   async getAdminList(): Promise<Array<AdminInfo>> {
     return await this.GET("/admin", {});
+  }
+
+  /**
+   * Get account volume across all markets, optionally for a specific market.
+   *
+   * @param accountId - Account identifier
+   * @param since - RFC3339 timestamp marking the inclusive start of the window
+   * @param until - RFC3339 timestamp marking the exclusive end of the window
+   * @param marketId - Optional market identifier to scope the volume
+   * @returns Array of market volumes (single entry when `marketId` is provided)
+   * @throws {NordError} If the request fails
+   */
+  async getAccountVolume({
+    accountId,
+    since,
+    until,
+    marketId,
+  }: Readonly<GetAccountVolumeQuery>): Promise<Array<AccountVolumeInfo>> {
+    return await this.GET("/account/volume", {
+      params: {
+        query: {
+          accountId,
+          since,
+          until,
+          marketId,
+        },
+      },
+    });
   }
 
   /**

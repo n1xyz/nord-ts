@@ -90,6 +90,9 @@ export type AccountFeeTier = components["schemas"]["AccountFeeTier"];
 export type AccountFeeTierPage =
   components["schemas"]["PageResult_for_uint32_and_AccountFeeTier"];
 export type AdminInfo = components["schemas"]["AdminInfo"];
+export type GetAccountVolumeQuery =
+  components["schemas"]["GetAccountVolumeQuery"];
+export type AccountVolumeInfo = components["schemas"]["AccountVolumeInfo"];
 
 /**
  * Configuration options for the Nord client
