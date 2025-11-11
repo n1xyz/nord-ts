@@ -5,11 +5,11 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist/",
-    "src/",
     "package.json",
     "README.md"
   ],
@@ -30,7 +30,6 @@
     "@bufbuild/protoplugin": "^2.6.3",
     "@types/bun": "latest",
     "@types/google-protobuf": "^3.15.12",
-    "@types/node": "^22.17.1",
     "@types/node-fetch": "^2.6.13",
     "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^8.39.1",

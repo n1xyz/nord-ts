@@ -44,7 +44,7 @@ export class NordAdmin {
    * @param admin - The user that will be signing actions.
    * @param signFn - Function to sign messages with the admin's wallet.
    */
-  public static new({
+  public static async new({
     nord,
     admin,
     signFn,
@@ -52,7 +52,7 @@ export class NordAdmin {
     nord: Nord;
     admin: PublicKey;
     signFn: (m: Transaction) => Promise<Transaction>;
-  }>): NordAdmin {
+  }>): Promise<NordAdmin> {
     return new NordAdmin({
       nord,
       admin,

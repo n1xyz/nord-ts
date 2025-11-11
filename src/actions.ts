@@ -88,7 +88,7 @@ export async function sendAction(
     );
   }
 
-  const rawResp = new Uint8Array(await response.response.bytes());
+  const rawResp = new Uint8Array(await response.response.arrayBuffer());
 
   const resp: proto.Receipt = decodeLengthDelimited(
     rawResp,

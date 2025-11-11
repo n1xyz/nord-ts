@@ -9,6 +9,7 @@ import { RequestInfo, RequestInit, Response } from "node-fetch";
 import { Keypair } from "@solana/web3.js";
 import bs58 from "bs58";
 import * as solana from "@solana/web3.js";
+import { Buffer } from "buffer";
 
 export const SESSION_TTL: bigint = 60n * 60n * 24n * 30n;
 export const ZERO_DECIMAL = new Decimal(0);
@@ -201,14 +202,14 @@ export function findMarket(markets: Market[], marketId: number): Market {
   if (marketId < 0 || markets.length - 1 < marketId) {
     throw new Error(`The market with marketId=${marketId} not found`);
   }
-  return markets[marketId];
+  return markets[marketId]!;
 }
 
 export function findToken(tokens: Token[], tokenId: number): Token {
   if (tokenId < 0 || tokens.length - 1 < tokenId) {
     throw new Error(`The token with tokenId=${tokenId} not found`);
   }
-  return tokens[tokenId];
+  return tokens[tokenId]!;
 }
 
 export function keypairFromPrivateKey(
@@ -250,6 +251,10 @@ export async function signUserPayload({
   );
   const signedTx = await signTransaction(tx);
   const sig = signedTx.signatures[0];
+  assert(
+    sig !== undefined, //.
+    "signed transaction must have a signature",
+  );
   assert(
     sig.signature !== null,
     "signature must be non-null; check your signTransaction function",

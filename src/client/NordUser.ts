@@ -461,7 +461,7 @@ export class NordUser {
         // Process balances
         this.balances[accountData.accountId] = [];
         for (const balance of accountData.balances) {
-          this.balances[accountData.accountId].push({
+          this.balances[accountData.accountId]!.push({
             accountId: accountData.accountId,
             balance: balance.amount,
             symbol: balance.token,
