@@ -30,6 +30,7 @@ import {
   OrderInfoFromApi,
   TokenStats,
   FillRole,
+  AdminInfo,
 } from "../types";
 import * as utils from "../utils";
 import { NordWebSocketClient } from "../websocket/index";
@@ -206,7 +207,7 @@ export class Nord {
    * @returns List of admin registration keys paired with their ACL role mask
    * @throws {NordError} If the request fails
    */
-  async getAdminList(): Promise<Array<[string, number]>> {
+  async getAdminList(): Promise<Array<AdminInfo>> {
     return await this.GET("/admin", {});
   }
 

@@ -89,6 +89,7 @@ export type TokenStats = components["schemas"]["TokenStats"];
 export type AccountFeeTier = components["schemas"]["AccountFeeTier"];
 export type AccountFeeTierPage =
   components["schemas"]["PageResult_for_uint32_and_AccountFeeTier"];
+export type AdminInfo = components["schemas"]["AdminInfo"];
 
 /**
  * Configuration options for the Nord client
