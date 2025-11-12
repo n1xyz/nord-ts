@@ -1,6 +1,6 @@
 {
   "name": "@n1xyz/nord-ts",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Typescript for Nord",
   "keywords": [],
   "author": "",
@@ -44,7 +44,7 @@
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.6.3",
-    "@n1xyz/proton": "0.0.6",
+    "@n1xyz/proton": "0.0.7",
     "@noble/curves": "^1.9.6",
     "@noble/ed25519": "^2.3.0",
     "@noble/hashes": "^1.8.0",
