@@ -8,12 +8,14 @@ import { Nord } from "./Nord";
 import { FeeTierConfig } from "../gen/nord_pb";
 
 // NOTE: keep in sync with `acl.rs`.
-// NOTE: don't forget `number` as int is internally a u32.
 export enum AclRole {
-  FEE_MANAGER = 1 << 0,
-  MARKET_MANAGER = 1 << 1,
-  // TODO: unsure about this?
-  ADMIN = 1 << 31,
+  // note: use 2 ** n instead of 1 << n since js internally
+  // casts number to a signed int for bitwise ops. when merging
+  // these roles, make sure to use += instead of |=. this will
+  // only work when the roles are powers of two.
+  FEE_MANAGER = 2 ** 0,
+  MARKET_MANAGER = 2 ** 1,
+  ADMIN = 2 ** 31,
 }
 
 /**
@@ -109,12 +111,11 @@ export class NordAdmin {
 
     let mask = 0;
     let values = 0;
-    for (const role of allRoles) {
-      mask |= role;
-    }
-    for (const role of addRoles) {
-      values |= role;
-    }
+
+    // using += instead of |= to avoid the internal cast to i32 >:(
+    // this works because our roles are powers of two.
+    for (const role of allRoles) mask += role;
+    for (const role of addRoles) values += role;
 
     const receipt = await this.submitAction({
       case: "updateAcl",
