@@ -272,7 +272,9 @@ export class NordUser {
     tokenId: number,
     recipient?: PublicKey,
   ): Promise<string> {
-    return this.deposit({ amount, tokenId, recipient });
+    return this.deposit({ amount, tokenId, recipient }).then(
+      (x) => x.signature,
+    );
   }
 
   /**
@@ -282,8 +284,13 @@ export class NordUser {
    * @param tokenId - Token ID
    * @param recipient - Recipient address; defaults to the user's address
    * @param sendOptions - Send options for .sendTransaction
-   * @returns Transaction signature
+   * @returns Transaction signature and buffer account
    * @throws {NordError} If required parameters are missing or operation fails
+   *
+   * The buffer account is used to correlate the deposit for when it gets queued.
+   * Note that even though there may technically be multiple deposits with the same
+   * buffer account, in the case of this method, there will only be one as it discards
+   * the buffer after performing the deposit.
    */
   async deposit({
     amount,
@@ -295,7 +302,7 @@ export class NordUser {
     tokenId: number;
     recipient?: PublicKey;
     sendOptions?: SendOptions;
-  }>): Promise<string> {
+  }>): Promise<{ signature: string; buffer: PublicKey }> {
     try {
       // Find the token info
       const tokenInfo = this.splTokenInfos.find((t) => t.tokenId === tokenId);
@@ -331,7 +338,10 @@ export class NordUser {
         sendOptions,
       );
 
-      return signature;
+      return {
+        signature,
+        buffer: extraSigner.publicKey,
+      };
     } catch (error) {
       throw new NordError(
         `Failed to deposit ${amount} of token ID ${tokenId}`,
