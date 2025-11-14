@@ -93,6 +93,9 @@ export type AdminInfo = components["schemas"]["AdminInfo"];
 export type GetAccountVolumeQuery =
   components["schemas"]["GetAccountVolumeQuery"];
 export type AccountVolumeInfo = components["schemas"]["AccountVolumeInfo"];
+export type GetPrevMarketPriceQuery =
+  components["schemas"]["GetPrevMarketPriceQuery"];
+export type PreviousMarketPrice = components["schemas"]["PreviousMarketPrice"];
 
 /**
  * Configuration options for the Nord client

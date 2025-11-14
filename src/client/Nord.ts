@@ -33,6 +33,7 @@ import {
   AdminInfo,
   AccountVolumeInfo,
   GetAccountVolumeQuery,
+  PreviousMarketPrice,
 } from "../types";
 import * as utils from "../utils";
 import { NordWebSocketClient } from "../websocket/index";
@@ -814,6 +815,31 @@ export class Nord {
           market_id: marketId,
           fee_kind: feeKind,
           account_id: accountId,
+        },
+      },
+    });
+  }
+
+  /**
+   * Fetch the latest available market price at or before the given timestamp.
+   *
+   * @param marketId - Market identifier
+   * @param atOrBefore - RFC3339 timestamp to look back from (returns the latest price at or before this time)
+   * @returns Previous market price record; price is `null` if no trades exist at or before `at`
+   * @throws {NordError} If the request fails
+   */
+  public async getPrevMarketPrice({
+    marketId,
+    atOrBefore,
+  }: Readonly<{
+    marketId: number;
+    atOrBefore: string;
+  }>): Promise<PreviousMarketPrice> {
+    return await this.GET("/market/{market_id}/price/prev", {
+      params: {
+        path: { market_id: marketId },
+        query: {
+          atOrBefore,
         },
       },
     });
