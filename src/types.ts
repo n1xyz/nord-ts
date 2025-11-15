@@ -75,14 +75,15 @@ export type SideFromApi = components["schemas"]["Side"];
 export type FillModeFromApi = components["schemas"]["FillMode"];
 export type PlacementOrigin = components["schemas"]["PlacementOrigin"];
 export type FinalizationReason = components["schemas"]["FinalizationReason"];
-export type AccountPnlQuery = components["schemas"]["AccountPnlQuery"];
+export type PagedQuery = components["schemas"]["PagedQuery"];
 export type AccountPnl = components["schemas"]["AccountPnl"];
 export type AccountPnlPage =
   components["schemas"]["PageResult_for_uint64_and_AccountPnl"];
 export type AccountTriggerInfo = components["schemas"]["AccountTriggerInfo"];
 export type TriggerHistoryPage =
   components["schemas"]["PageResult_for_uint64_and_HistoryTriggerInfo"];
-export type HistoryTriggerQuery = components["schemas"]["AccountTriggersQuery"];
+export type WithdrawalHistoryPage =
+  components["schemas"]["PageResult_for_uint64_and_Withdrawal"];
 export type FeeTierConfig = components["schemas"]["FeeTierConfig"];
 export type FeeTierId = components["schemas"]["FeeTierId"];
 export type TokenStats = components["schemas"]["TokenStats"];
@@ -96,6 +97,7 @@ export type AccountVolumeInfo = components["schemas"]["AccountVolumeInfo"];
 export type GetPrevMarketPriceQuery =
   components["schemas"]["GetPrevMarketPriceQuery"];
 export type PreviousMarketPrice = components["schemas"]["PreviousMarketPrice"];
+export type WithdrawalInfo = components["schemas"]["Withdrawal"];
 
 /**
  * Configuration options for the Nord client

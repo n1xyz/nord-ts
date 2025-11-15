@@ -7,7 +7,7 @@ import type { paths } from "../gen/openapi.ts";
 import {
   Account,
   AccountPnlPage,
-  AccountPnlQuery,
+  PagedQuery,
   ActionResponse,
   MarketsInfo,
   Market,
@@ -21,8 +21,8 @@ import {
   TradesResponse,
   User,
   AccountTriggerInfo,
-  HistoryTriggerQuery,
   TriggerHistoryPage,
+  WithdrawalHistoryPage,
   FeeTierId,
   AccountFeeTierPage,
   PageResultStringOrderInfo,
@@ -756,7 +756,7 @@ export class Nord {
       until,
       startInclusive,
       pageSize,
-    }: Readonly<Partial<AccountPnlQuery>> = {},
+    }: Readonly<Partial<PagedQuery>> = {},
   ): Promise<AccountPnlPage> {
     return await this.GET("/account/{account_id}/pnl", {
       params: {
@@ -962,7 +962,7 @@ export class Nord {
     pageSize,
     startInclusive,
   }: Readonly<
-    HistoryTriggerQuery & { accountId?: number }
+    PagedQuery & { accountId?: number }
   >): Promise<TriggerHistoryPage> {
     if (accountId == null) {
       throw new NordError(
@@ -984,6 +984,50 @@ export class Nord {
       });
     } catch (error) {
       throw new NordError("Failed to fetch account trigger history", {
+        cause: error,
+      });
+    }
+  }
+
+  /**
+   * Fetch withdrawal history for an account.
+   *
+   * @param accountId - Account identifier owning the withdrawals
+   * @param since - RFC3339 timestamp to start from (inclusive)
+   * @param until - RFC3339 timestamp to end at (exclusive)
+   * @param pageSize - Maximum number of entries to return
+   * @param startInclusive - Pagination cursor to resume from
+   * @throws {NordError} If no account can be resolved or the request fails.
+   */
+  async getAccountWithdrawalHistory({
+    accountId,
+    since,
+    until,
+    pageSize,
+    startInclusive,
+  }: Readonly<
+    PagedQuery & { accountId?: number }
+  >): Promise<WithdrawalHistoryPage> {
+    if (accountId == null) {
+      throw new NordError(
+        "Account ID is undefined. Make sure to call updateAccountId() before requesting withdrawal history.",
+      );
+    }
+
+    try {
+      return await this.GET("/account/{account_id}/history/withdrawal", {
+        params: {
+          path: { account_id: accountId },
+          query: {
+            since,
+            until,
+            pageSize,
+            startInclusive,
+          },
+        },
+      });
+    } catch (error) {
+      throw new NordError("Failed to fetch account withdrawal history", {
         cause: error,
       });
     }
