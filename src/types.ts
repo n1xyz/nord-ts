@@ -81,7 +81,7 @@ export type AccountPnlPage =
   components["schemas"]["PageResult_for_uint64_and_AccountPnl"];
 export type AccountTriggerInfo = components["schemas"]["AccountTriggerInfo"];
 export type TriggerHistoryPage =
-  components["schemas"]["PageResult_for_uint64_and_HistoryTriggerInfo"];
+  components["schemas"]["PageResult_for_uint64_and_Trigger"];
 export type WithdrawalHistoryPage =
   components["schemas"]["PageResult_for_uint64_and_Withdrawal"];
 export type FeeTierConfig = components["schemas"]["FeeTierConfig"];
