@@ -228,7 +228,7 @@ export function keypairFromPrivateKey(
   return Keypair.fromSecretKey(privateKey);
 }
 
-export async function signUserPayload({
+export async function signAdminPayload({
   payload,
   user,
   signTransaction,
@@ -268,4 +268,14 @@ export async function signUserPayload({
     `signature is for ${sig.publicKey}, expected ${user}`,
   );
   return sig.signature;
+}
+
+export async function signUserPayload({
+  payload,
+  signMessage,
+}: Readonly<{
+  payload: Uint8Array;
+  signMessage: (message: Uint8Array) => Promise<Uint8Array>;
+}>): Promise<Uint8Array> {
+  return await signMessage(new TextEncoder().encode(payload.toHex()));
 }

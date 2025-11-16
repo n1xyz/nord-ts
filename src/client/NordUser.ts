@@ -4,7 +4,7 @@ import {
   TOKEN_PROGRAM_ID,
   TOKEN_2022_PROGRAM_ID,
 } from "@solana/spl-token";
-import { PublicKey, Transaction, SendOptions } from "@solana/web3.js";
+import { PublicKey, Keypair, Transaction, SendOptions } from "@solana/web3.js";
 import Decimal from "decimal.js";
 import * as ed from "@noble/ed25519";
 import { floatToScaledBigIntLossy } from "@n1xyz/proton";
@@ -79,14 +79,15 @@ export interface UserAtomicSubaction {
  * User class for interacting with the Nord protocol
  */
 export class NordUser {
+  private readonly signSessionMessage: (_: Uint8Array) => Promise<Uint8Array>;
+  private readonly signMessage: (_: Uint8Array) => Promise<Uint8Array>;
+  private readonly signTransaction: (_: Transaction) => Promise<Transaction>;
+
   public readonly nord: Nord;
-  public readonly sessionSignFn: (message: Uint8Array) => Promise<Uint8Array>;
-  public readonly transactionSignFn: (tx: Transaction) => Promise<Transaction>;
   public sessionId?: bigint;
   public sessionPubKey: PublicKey;
   public publicKey: PublicKey;
   public lastTs = 0;
-
   private nonce = 0;
 
   /** User balances by token symbol */
@@ -131,38 +132,30 @@ export class NordUser {
   /** SPL token information */
   public splTokenInfos: SPLTokenInfo[] = [];
 
-  /**
-   * Create a new NordUser instance
-   *
-   * @param nord - Nord client instance
-   * @param sessionSignFn - Function to sign messages with the user's session key
-   * @param transactionSignFn - Function to sign transactions with the user's wallet (optional)
-   * @param sessionId - Existing session identifier
-   * @param sessionPubKey - Session public key
-   * @param publicKey - Wallet public key
-   * @throws {NordError} If required parameters are missing
-   */
-  constructor({
+  private constructor({
     nord,
-    sessionSignFn,
-    transactionSignFn,
+    walletPubkey,
+    sessionPubkey,
     sessionId,
-    sessionPubKey,
-    publicKey,
+    signMessageFn,
+    signTransactionFn,
+    signSessionFn,
   }: Readonly<{
     nord: Nord;
-    sessionSignFn: (message: Uint8Array) => Promise<Uint8Array>;
-    transactionSignFn: (tx: Transaction) => Promise<Transaction>;
+    signSessionFn: (rawMessage: Uint8Array) => Promise<Uint8Array>;
+    signMessageFn: (utf8Message: Uint8Array) => Promise<Uint8Array>;
+    signTransactionFn: (tx: Transaction) => Promise<Transaction>;
     sessionId?: bigint;
-    sessionPubKey: Uint8Array;
-    publicKey: PublicKey;
+    sessionPubkey: Uint8Array;
+    walletPubkey: PublicKey;
   }>) {
     this.nord = nord;
-    this.sessionSignFn = sessionSignFn;
-    this.transactionSignFn = transactionSignFn;
+    this.signSessionMessage = signSessionFn;
+    this.signMessage = signMessageFn;
+    this.signTransaction = signTransactionFn;
     this.sessionId = sessionId;
-    this.sessionPubKey = new PublicKey(sessionPubKey);
-    this.publicKey = publicKey;
+    this.sessionPubKey = new PublicKey(sessionPubkey);
+    this.publicKey = walletPubkey;
 
     // Convert tokens from info endpoint to SPLTokenInfo
     if (this.nord.tokens && this.nord.tokens.length > 0) {
@@ -176,6 +169,46 @@ export class NordUser {
   }
 
   /**
+   * Create a new NordUser instance
+   *
+   * @param nord - Nord client instance
+   * @param walletPubkey - Wallet public key
+   * @param sessionPubKey - Session public key
+   * @param sessionId - Existing session identifier, if known. Otherwise, pass nothing and call `refreshSession` to fetch a new session.
+   * @param signMessageFn - Function to sign the given UTF-8 string with the user's wallet. Typically just your wallet's `signMessage` method.
+   * @param signTransactionFn - Function to sign transactions with the user's wallet. Typically just your wallet's `signTransaction` method.
+   * @param signSessionFn - Function to sign messages with the provided `sessionPubKey`
+   * @throws {NordError} If required parameters are missing
+   */
+  public static async new({
+    nord,
+    walletPubkey,
+    sessionPubkey,
+    sessionId,
+    signMessageFn,
+    signTransactionFn,
+    signSessionFn,
+  }: Readonly<{
+    nord: Nord;
+    signSessionFn: (rawMessage: Uint8Array) => Promise<Uint8Array>;
+    signMessageFn: (utf8Message: Uint8Array) => Promise<Uint8Array>;
+    signTransactionFn: (tx: Transaction) => Promise<Transaction>;
+    sessionId?: bigint;
+    sessionPubkey: Uint8Array;
+    walletPubkey: PublicKey;
+  }>): Promise<NordUser> {
+    return new NordUser({
+      nord,
+      walletPubkey,
+      sessionPubkey,
+      sessionId,
+      signMessageFn,
+      signTransactionFn,
+      signSessionFn,
+    });
+  }
+
+  /**
    * Create a NordUser from a private key
    *
    * @param nord - Nord instance
@@ -185,29 +218,23 @@ export class NordUser {
    */
   static fromPrivateKey(nord: Nord, privateKey: string | Uint8Array): NordUser {
     try {
-      const keypair = keypairFromPrivateKey(privateKey);
-      const publicKey = keypair.publicKey;
-
-      const sessionSignFn = async (
-        message: Uint8Array,
-      ): Promise<Uint8Array> => {
-        // Use ed25519 to sign the message
-        return ed.sign(message, keypair.secretKey.slice(0, 32));
-      };
-
-      const transactionSignFn = async (
-        tx: Transaction,
-      ): Promise<Transaction> => {
-        tx.sign(keypair);
-        return tx;
-      };
+      const wallet = keypairFromPrivateKey(privateKey);
+      const sessionKey = Keypair.generate();
 
       return new NordUser({
         nord,
-        sessionSignFn,
-        transactionSignFn,
-        publicKey,
-        sessionPubKey: publicKey.toBytes(),
+        walletPubkey: wallet.publicKey,
+        sessionPubkey: sessionKey.publicKey.toBytes(),
+        signTransactionFn: async (tx) => {
+          tx.sign(wallet);
+          return tx;
+        },
+        signMessageFn: async (xs) => {
+          return ed.sign(xs, wallet.secretKey);
+        },
+        signSessionFn: async (xs) => {
+          return ed.sign(xs, sessionKey.secretKey);
+        },
       });
     } catch (error) {
       throw new NordError("Failed to create NordUser from private key", {
@@ -330,7 +357,7 @@ export class NordUser {
       tx.recentBlockhash = blockhash;
       tx.feePayer = payer;
 
-      const signedTx = await this.transactionSignFn(tx);
+      const signedTx = await this.signTransaction(tx);
       signedTx.partialSign(extraSigner);
 
       const signature = await this.nord.solanaConnection.sendRawTransaction(
@@ -363,7 +390,7 @@ export class NordUser {
     kind: proto.Action["kind"],
   ): Promise<proto.Receipt> {
     return this.submitSignedAction(kind, async (message) => {
-      const signature = await this.sessionSignFn(message);
+      const signature = await this.signSessionMessage(message);
       const signed = new Uint8Array(message.length + signature.length);
       signed.set(message);
       signed.set(signature, message.length);
@@ -495,7 +522,7 @@ export class NordUser {
   async refreshSession(): Promise<void> {
     const result = await createSession(
       this.nord.httpClient,
-      this.transactionSignFn,
+      this.signMessage,
       await this.nord.getTimestamp(),
       this.getNonce(),
       {
@@ -515,11 +542,10 @@ export class NordUser {
     try {
       await revokeSession(
         this.nord.httpClient,
-        this.transactionSignFn,
+        this.signMessage,
         await this.nord.getTimestamp(),
         this.getNonce(),
         {
-          userPubkey: this.publicKey,
           sessionId,
         },
       );
@@ -956,7 +982,7 @@ export class NordUser {
 
       const result = await atomic(
         this.nord.httpClient,
-        this.sessionSignFn,
+        this.signSessionMessage,
         await this.nord.getTimestamp(),
         this.getNonce(),
         {

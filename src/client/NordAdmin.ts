@@ -1,7 +1,7 @@
 import { create } from "@bufbuild/protobuf";
 import { PublicKey, Transaction } from "@solana/web3.js";
 import * as proto from "../gen/nord_pb";
-import { decodeHex, signUserPayload } from "../utils";
+import { decodeHex, signAdminPayload } from "../utils";
 import { createAction, sendAction, expectReceiptKind } from "../actions";
 import { NordError } from "../error";
 import { Nord } from "./Nord";
@@ -76,7 +76,7 @@ export class NordAdmin {
     return sendAction(
       this.nord.httpClient,
       async (xs: Uint8Array) => {
-        const signature = await signUserPayload({
+        const signature = await signAdminPayload({
           payload: xs,
           user: this.admin,
           signTransaction: this.signFn,

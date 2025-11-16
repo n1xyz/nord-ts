@@ -14,7 +14,7 @@ import {
 } from "./utils";
 import { sizeDelimitedEncode } from "@bufbuild/protobuf/wire";
 import { NordError } from "./error";
-import { PublicKey, Transaction } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 
 type ReceiptKind = NonNullable<proto.Receipt["kind"]>;
 type ExtractReceiptKind<K extends ReceiptKind["case"]> = Extract<
@@ -131,7 +131,7 @@ export async function prepareAction(
 
 export async function createSession(
   client: Client<paths>,
-  signTransaction: (tx: Transaction) => Promise<Transaction>,
+  signMessage: (_: Uint8Array) => Promise<Uint8Array>,
   currentTimestamp: bigint,
   nonce: number,
   params: {
@@ -169,8 +169,7 @@ export async function createSession(
         ...payload,
         ...(await signUserPayload({
           payload,
-          user: params.userPubkey,
-          signTransaction,
+          signMessage,
         })),
       ]);
     },
@@ -189,12 +188,11 @@ export async function createSession(
 
 export async function revokeSession(
   client: Client<paths>,
-  signTransaction: (tx: Transaction) => Promise<Transaction>,
+  signMessage: (_: Uint8Array) => Promise<Uint8Array>,
   currentTimestamp: bigint,
   nonce: number,
   params: {
     sessionId: BigIntValue;
-    userPubkey: PublicKey;
   },
 ): Promise<{ actionId: bigint }> {
   const action = createAction(currentTimestamp, nonce, {
@@ -211,8 +209,7 @@ export async function revokeSession(
         ...payload,
         ...(await signUserPayload({
           payload,
-          user: params.userPubkey,
-          signTransaction,
+          signMessage,
         })),
       ]);
     },
