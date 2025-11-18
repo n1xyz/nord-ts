@@ -230,10 +230,10 @@ export class NordUser {
           return tx;
         },
         signMessageFn: async (xs) => {
-          return ed.sign(xs, wallet.secretKey);
+          return await ed.signAsync(xs, wallet.secretKey.slice(0, 32));
         },
         signSessionFn: async (xs) => {
-          return ed.sign(xs, sessionKey.secretKey);
+          return await ed.signAsync(xs, sessionKey.secretKey.slice(0, 32));
         },
       });
     } catch (error) {
