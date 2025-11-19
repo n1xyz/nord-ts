@@ -19,7 +19,6 @@ import {
 import * as proto from "../gen/nord_pb";
 import {
   BigIntValue,
-  checkedFetch,
   assert,
   findMarket,
   findToken,
@@ -482,10 +481,9 @@ export class NordUser {
       const accountsData: (Account & { accountId: number })[] =
         await Promise.all(
           this.accountIds.map(async (accountId) => {
-            const response = await checkedFetch(
-              `${this.nord.webServerUrl}/account/${accountId}`,
-            );
-            const accountData = (await response.json()) as Account;
+            const accountData = (await this.nord.getAccount(
+              accountId,
+            )) as Account;
             // Ensure we have the correct accountId
             return {
               ...accountData,
