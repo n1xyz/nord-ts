@@ -481,9 +481,7 @@ export class NordUser {
       const accountsData: (Account & { accountId: number })[] =
         await Promise.all(
           this.accountIds.map(async (accountId) => {
-            const accountData = (await this.nord.getAccount(
-              accountId,
-            )) as Account;
+            const accountData = await this.nord.getAccount(accountId);
             // Ensure we have the correct accountId
             return {
               ...accountData,
