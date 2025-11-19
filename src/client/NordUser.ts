@@ -454,7 +454,14 @@ export class NordUser {
         }
 
         // Process positions
-        this.positions[accountData.accountId] = accountData.positions;
+        this.positions[accountData.accountId] = accountData.positions.map(
+          (p) => ({
+            marketId: p.marketId,
+            openOrders: p.openOrders,
+            actionId: p.actionId,
+            ...(p.perp != null ? { perp: p.perp } : {}),
+          }),
+        );
 
         // Process margins
         this.margins[accountData.accountId] = accountData.margins;
