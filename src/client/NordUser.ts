@@ -15,6 +15,7 @@ import {
   QuoteSize,
   TriggerKind,
   fillModeToProtoFillMode,
+  Account,
 } from "../types";
 import * as proto from "../gen/nord_pb";
 import {
@@ -428,55 +429,6 @@ export class NordUser {
    * @throws {NordError} If the operation fails
    */
   async fetchInfo(): Promise<void> {
-    type OpenOrder = {
-      orderId: number;
-      marketId: number;
-      side: "ask" | "bid";
-      size: number;
-      price: number;
-      originalOrderSize: number;
-      clientOrderId?: number | null;
-    };
-
-    type Balance = {
-      tokenId: number;
-      token: string;
-      amount: number;
-    };
-
-    type Position = {
-      marketId: number;
-      openOrders: number;
-      perp?: {
-        baseSize: number;
-        price: number;
-        updatedFundingRateIndex: number;
-        fundingPaymentPnl: number;
-        sizePricePnl: number;
-        isLong: boolean;
-      };
-      actionId: number;
-    };
-
-    type Margins = {
-      omf: number;
-      mf: number;
-      imf: number;
-      cmf: number;
-      mmf: number;
-      pon: number;
-      pn: number;
-      bankruptcy: boolean;
-    };
-
-    type Account = {
-      updateId: number;
-      orders: OpenOrder[];
-      positions: Position[];
-      balances: Balance[];
-      margins: Margins;
-    };
-
     if (this.accountIds !== undefined) {
       const accountsData: (Account & { accountId: number })[] =
         await Promise.all(
