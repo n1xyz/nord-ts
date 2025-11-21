@@ -95,6 +95,18 @@ export class NordUser {
     [key: string]: { accountId: number; balance: number; symbol: string }[];
   } = {};
 
+  public orders: {
+    [key: string]: {
+      orderId: string;
+      marketId: number;
+      side: "ask" | "bid";
+      size: number;
+      price: number;
+      originalOrderSize: number;
+      clientOrderId: number | null;
+    }[];
+  } = {};
+
   /** User positions by account ID */
   public positions: {
     [key: string]: {
@@ -443,6 +455,16 @@ export class NordUser {
         );
 
       for (const accountData of accountsData) {
+        this.orders[accountData.accountId] = accountData.orders.map((o) => ({
+          orderId: o.orderId,
+          marketId: o.marketId,
+          side: o.side,
+          size: o.size,
+          price: o.price,
+          originalOrderSize: o.originalOrderSize,
+          clientOrderId: o.clientOrderId ?? null,
+        }));
+
         // Process balances
         this.balances[accountData.accountId] = [];
         for (const balance of accountData.balances) {
