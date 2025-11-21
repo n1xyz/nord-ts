@@ -283,15 +283,18 @@ export class NordWebSocketClient
     const hasOwn = (k: string) =>
       Object.prototype.hasOwnProperty.call(message, k);
     if (hasOwn("trades")) {
-      this.emit("trades", message as WebSocketTradeUpdate);
+      this.emit("trades", (message as { trades: WebSocketTradeUpdate }).trades);
       return;
     }
     if (hasOwn("delta")) {
-      this.emit("delta", message as WebSocketDeltaUpdate);
+      this.emit("delta", (message as { delta: WebSocketDeltaUpdate }).delta);
       return;
     }
     if (hasOwn("account")) {
-      this.emit("account", message as WebSocketAccountUpdate);
+      this.emit(
+        "account",
+        (message as { account: WebSocketAccountUpdate }).account,
+      );
       return;
     }
 

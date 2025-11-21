@@ -280,9 +280,9 @@ export interface WebSocketAccountUpdate {
 }
 
 export type WebSocketMessage =
-  | WebSocketTradeUpdate
-  | WebSocketDeltaUpdate
-  | WebSocketAccountUpdate;
+  | { trades: WebSocketTradeUpdate }
+  | { delta: WebSocketDeltaUpdate }
+  | { account: WebSocketAccountUpdate };
 
 export interface SPLTokenInfo {
   mint: string;

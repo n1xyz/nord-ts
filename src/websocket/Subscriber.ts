@@ -2,7 +2,7 @@ import { EventEmitter } from "events";
 import {
   Account,
   DeltaEvent,
-  OrderbookResponse,
+  WebSocketDeltaUpdate,
   SubscriberConfig,
   StreamTrade,
   Trades,
@@ -39,7 +39,7 @@ export class Subscriber {
  * Interface for orderbook subscription
  */
 export interface OrderbookSubscription extends EventEmitter {
-  on(event: "message", listener: (data: OrderbookResponse) => void): this;
+  on(event: "message", listener: (data: WebSocketDeltaUpdate) => void): this;
   on(event: "error", listener: (error: Error) => void): this;
   close(): void;
   removeAllListeners(event?: string): this;

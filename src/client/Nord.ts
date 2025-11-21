@@ -7,6 +7,9 @@ import type { paths } from "../gen/openapi.ts";
 import {
   Account,
   AccountPnlPage,
+  WebSocketDeltaUpdate,
+  WebSocketTradeUpdate,
+  WebSocketAccountUpdate,
   PagedQuery,
   ActionResponse,
   MarketsInfo,
@@ -385,12 +388,8 @@ export class Nord {
       deltas: [symbol],
     });
 
-    const handleDelta = (update: {
-      symbol: string;
-      bids: [number, number][];
-      asks: [number, number][];
-    }) => {
-      if (update.symbol !== symbol) {
+    const handleDelta = (update: WebSocketDeltaUpdate) => {
+      if (update.market_symbol !== symbol) {
         return;
       }
 
@@ -424,15 +423,7 @@ export class Nord {
       trades: [symbol],
     });
 
-    const handleTrade = (update: {
-      symbol: string;
-      trades: Array<{
-        price: number;
-        size: number;
-        side: string;
-        timestamp: number;
-      }>;
-    }) => {
+    const handleTrade = (update: WebSocketTradeUpdate) => {
       if (update.symbol !== symbol) {
         return;
       }
@@ -467,8 +458,8 @@ export class Nord {
       accounts: [accountId],
     });
 
-    const handleAccountUpdate = (update: any) => {
-      if (update.account_id !== accountId) {
+    const handleAccountUpdate = (update: WebSocketAccountUpdate) => {
+      if (update.accountId !== accountId) {
         return;
       }
 
