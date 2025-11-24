@@ -76,9 +76,9 @@ export type FillModeFromApi = components["schemas"]["FillMode"];
 export type PlacementOrigin = components["schemas"]["PlacementOrigin"];
 export type FinalizationReason = components["schemas"]["FinalizationReason"];
 export type PagedQuery = components["schemas"]["PagedQuery"];
-export type AccountPnl = components["schemas"]["AccountPnl"];
-export type AccountPnlPage =
-  components["schemas"]["PageResult_for_uint64_and_AccountPnl"];
+export type AccountPnlInfo = components["schemas"]["AccountPnlInfo"];
+export type AccountPnlInfoPage =
+  components["schemas"]["PageResult_for_uint64_and_AccountPnlInfo"];
 export type AccountTriggerInfo = components["schemas"]["AccountTriggerInfo"];
 export type TriggerHistoryPage =
   components["schemas"]["PageResult_for_uint64_and_Trigger"];

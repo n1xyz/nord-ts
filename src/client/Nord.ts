@@ -6,7 +6,7 @@ import * as proto from "../gen/nord_pb";
 import type { paths } from "../gen/openapi.ts";
 import {
   Account,
-  AccountPnlPage,
+  AccountPnlInfoPage,
   WebSocketDeltaUpdate,
   WebSocketTradeUpdate,
   WebSocketAccountUpdate,
@@ -748,7 +748,7 @@ export class Nord {
       startInclusive,
       pageSize,
     }: Readonly<Partial<PagedQuery>> = {},
-  ): Promise<AccountPnlPage> {
+  ): Promise<AccountPnlInfoPage> {
     return await this.GET("/account/{account_id}/pnl", {
       params: {
         path: { account_id: accountId },
