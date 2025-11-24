@@ -459,7 +459,7 @@ export class Nord {
     });
 
     const handleAccountUpdate = (update: WebSocketAccountUpdate) => {
-      if (update.accountId !== accountId) {
+      if (update.account_id !== accountId) {
         return;
       }
 

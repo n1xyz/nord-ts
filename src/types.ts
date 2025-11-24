@@ -269,14 +269,22 @@ export interface WebSocketDeltaUpdate {
   timestamp: number;
 }
 
-/**
- * WebSocket user update message
- */
 export interface WebSocketAccountUpdate {
-  e: WebSocketMessageType.AccountUpdate;
-  accountId: number;
-  account: Account;
-  timestamp: number;
+  last_update_id: number;
+  update_id: number;
+  account_id: number;
+  fills: Record<string, unknown>;
+  places: Record<string, unknown>;
+  cancels: Record<
+    string,
+    {
+      side: "bid" | "ask";
+      current_size: number;
+      price: number;
+      market_id: number;
+    }
+  >;
+  balances: Record<string, unknown>;
 }
 
 export type WebSocketMessage =
