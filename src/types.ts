@@ -273,8 +273,29 @@ export interface WebSocketAccountUpdate {
   last_update_id: number;
   update_id: number;
   account_id: number;
-  fills: Record<string, unknown>;
-  places: Record<string, unknown>;
+  fills: Record<
+    string,
+    {
+      side: "bid" | "ask";
+      quantity: number;
+      remaining: number;
+      price: number;
+      order_id: string;
+      market_id: number;
+      maker_id: number;
+      taker_id: number;
+      sender_tracking_id: number | null;
+    }
+  >;
+  places: Record<
+    string,
+    {
+      side: "bid" | "ask";
+      current_size: number;
+      price: number;
+      market_id: number;
+    }
+  >;
   cancels: Record<
     string,
     {
