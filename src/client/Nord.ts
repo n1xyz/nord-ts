@@ -424,7 +424,7 @@ export class Nord {
     });
 
     const handleTrade = (update: WebSocketTradeUpdate) => {
-      if (update.symbol !== symbol) {
+      if (update.market_symbol !== symbol) {
         return;
       }
 

@@ -158,7 +158,7 @@ export interface StreamTrade {
   side: Side;
   price: number;
   size: number;
-  order_id: number;
+  order_id: string;
 }
 
 export interface Trades {
@@ -249,12 +249,7 @@ export enum WebSocketMessageType {
 /**
  * WebSocket trade update message
  */
-export interface WebSocketTradeUpdate {
-  e: WebSocketMessageType.TradeUpdate;
-  symbol: string;
-  trades: StreamTrade[];
-  timestamp: number;
-}
+export type WebSocketTradeUpdate = Trades;
 
 /**
  * WebSocket delta update message

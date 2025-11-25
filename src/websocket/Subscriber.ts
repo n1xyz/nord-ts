@@ -6,6 +6,7 @@ import {
   SubscriberConfig,
   StreamTrade,
   Trades,
+  WebSocketTradeUpdate,
 } from "../types";
 import { MAX_BUFFER_LEN } from "../utils";
 
@@ -49,7 +50,7 @@ export interface OrderbookSubscription extends EventEmitter {
  * Interface for trade subscription
  */
 export interface TradeSubscription extends EventEmitter {
-  on(event: "message", listener: (data: StreamTrade[]) => void): this;
+  on(event: "message", listener: (data: WebSocketTradeUpdate) => void): this;
   on(event: "error", listener: (error: Error) => void): this;
   close(): void;
   removeAllListeners(event?: string): this;
