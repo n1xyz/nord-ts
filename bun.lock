@@ -4,7 +4,7 @@
     "": {
       "dependencies": {
         "@bufbuild/protobuf": "^2.6.3",
-        "@n1xyz/proton": "0.0.7",
+        "@n1xyz/proton": "0.1.0",
         "@noble/curves": "^1.9.6",
         "@noble/ed25519": "^2.3.0",
         "@noble/hashes": "^1.8.0",
@@ -94,7 +94,7 @@
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.9", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.0.3", "@jridgewell/sourcemap-codec": "^1.4.10" } }, "sha512-3Belt6tdc8bPgAtbcmdtNJlirVoTmEb5e2gC94PnkwEW9jI6CAHUeoG85tjWP5WquqfavoMtMwiG4P926ZKKuQ=="],
 
-    "@n1xyz/proton": ["@n1xyz/proton@0.0.7", "", { "dependencies": { "@coral-xyz/anchor": "=0.31.1", "@solana/spl-token": "^0.4.13", "@solana/web3.js": "^1.98.4", "buffer": "^6.0.3", "openapi-fetch": "^0.14.0" } }, "sha512-SMCRwiuuKND5crfBoIqN/WTJBFEV+WynqGxzqQTTsqHbtc2Uc5wkCLoRVFNA44ZD7puh05z3CCEuUmg06nOoug=="],
+    "@n1xyz/proton": ["@n1xyz/proton@0.1.0", "", { "dependencies": { "@coral-xyz/anchor": "=0.31.1", "@solana/spl-token": "^0.4.13", "@solana/web3.js": "^1.98.4", "buffer": "^6.0.3", "openapi-fetch": "^0.14.0" } }, "sha512-QwEj5obQ0iupqFhnxS51OSGAwORMoyCIh4xty17NPiXx9i57VIRHIrp8q3hOPTHhQiARQQqoGyl/I7Q4Ak3Zlw=="],
 
     "@noble/curves": ["@noble/curves@1.9.6", "", { "dependencies": { "@noble/hashes": "1.8.0" } }, "sha512-GIKz/j99FRthB8icyJQA51E8Uk5hXmdyThjgQXRKiv9h0zeRlzSCLIzFw6K1LotZ3XuB7yzlf76qk7uBmTdFqA=="],
 
