@@ -78,12 +78,12 @@ export type FinalizationReason = components["schemas"]["FinalizationReason"];
 export type PagedQuery = components["schemas"]["PagedQuery"];
 export type AccountPnlInfo = components["schemas"]["AccountPnlInfo"];
 export type AccountPnlInfoPage =
-  components["schemas"]["PageResult_for_uint64_and_AccountPnlInfo"];
+  components["schemas"]["PageResult_for_String_and_AccountPnlInfo"];
 export type AccountTriggerInfo = components["schemas"]["AccountTriggerInfo"];
 export type TriggerHistoryPage =
-  components["schemas"]["PageResult_for_uint64_and_Trigger"];
+  components["schemas"]["PageResult_for_String_and_Trigger"];
 export type WithdrawalHistoryPage =
-  components["schemas"]["PageResult_for_uint64_and_Withdrawal"];
+  components["schemas"]["PageResult_for_String_and_Withdrawal"];
 export type FeeTierConfig = components["schemas"]["FeeTierConfig"];
 export type FeeTierId = components["schemas"]["FeeTierId"];
 export type TokenStats = components["schemas"]["TokenStats"];
