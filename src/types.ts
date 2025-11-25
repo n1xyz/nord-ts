@@ -269,12 +269,14 @@ export interface WebSocketDeltaUpdate {
   timestamp: number;
 }
 
+export type OrderId = string;
+
 export interface WebSocketAccountUpdate {
   last_update_id: number;
   update_id: number;
   account_id: number;
   fills: Record<
-    string,
+    OrderId,
     {
       side: "bid" | "ask";
       quantity: number;
@@ -288,7 +290,7 @@ export interface WebSocketAccountUpdate {
     }
   >;
   places: Record<
-    string,
+    OrderId,
     {
       side: "bid" | "ask";
       current_size: number;
@@ -297,7 +299,7 @@ export interface WebSocketAccountUpdate {
     }
   >;
   cancels: Record<
-    string,
+    OrderId,
     {
       side: "bid" | "ask";
       current_size: number;
@@ -305,7 +307,7 @@ export interface WebSocketAccountUpdate {
       market_id: number;
     }
   >;
-  balances: Record<string, unknown>;
+  balances: Record<string, number>;
 }
 
 export type WebSocketMessage =
