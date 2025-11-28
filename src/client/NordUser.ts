@@ -728,6 +728,9 @@ export class NordUser {
    * @param accountId - Account executing the trigger
    * @returns Object containing the actionId of the submitted trigger
    * @throws {NordError} If the operation fails
+   *
+   * NOTE: You can upsert a trigger by providing the same trigger data
+   * with specifically identifiaction by (marketId, accountId,side,kind).
    */
   async addTrigger({
     marketId,
