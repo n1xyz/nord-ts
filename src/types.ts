@@ -79,7 +79,7 @@ export type PagedQuery = components["schemas"]["PagedQuery"];
 export type AccountPnlInfo = components["schemas"]["AccountPnlInfo"];
 export type AccountPnlInfoPage =
   components["schemas"]["PageResult_for_String_and_AccountPnlInfo"];
-export type AccountTriggerInfo = components["schemas"]["AccountTriggerInfo"];
+export type AccountTriggerInfo = components["schemas"]["TriggerInfo"];
 export type TriggerHistoryPage =
   components["schemas"]["PageResult_for_String_and_Trigger"];
 export type WithdrawalHistoryPage =
