@@ -6,7 +6,8 @@
   "author": "",
   "license": "ISC",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/index.common.js",
+  "browser": "dist/index.browser.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist/",
@@ -17,12 +18,14 @@
     "gen:proto": "bunx @bufbuild/buf generate ../engine",
     "gen:api": "nix run ..#openapi | bunx openapi-typescript > src/gen/openapi.ts",
     "gen": "bun run gen:proto && bun run gen:api",
-    "build": "bun run gen && bunx tsc && bun run docs",
+    "build:node": "bun build ./src/index.ts --target=node --format=esm --outfile=dist/index.common.js",
+    "build:browser": "bun build ./src/index.ts --target=browser --format=esm --outfile=dist/index.browser.js",
+    "build": "bun run gen && bunx tsc && bun run build:node && bun run build:browser && bun run docs",
     "docs": "bunx typedoc --out ./docs ./src",
     "compile": "tsc",
     "clean": "rm -rf ./src/gen ./dist ./docs",
     "fmt": "prettier --write src tests",
-    "ci": "bunx eslint && prettier --check src tests",
+    "ci": "bunx eslint && bunx tsc && prettier --check src tests",
     "all": "bun install && bun run build && bun run ci && bun fmt"
   },
   "devDependencies": {
