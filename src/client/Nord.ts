@@ -10,6 +10,7 @@ import {
   WebSocketDeltaUpdate,
   WebSocketTradeUpdate,
   WebSocketAccountUpdate,
+  WebSocketCandleUpdate,
   PagedQuery,
   ActionResponse,
   MarketsInfo,
@@ -37,6 +38,7 @@ import {
   AccountVolumeInfo,
   GetAccountVolumeQuery,
   PreviousMarketPrice,
+  CandleResolution,
 } from "../types";
 import * as utils from "../utils";
 import { NordWebSocketClient } from "../websocket/index";
@@ -44,6 +46,7 @@ import { initWebSocketClient } from "../websocket";
 import {
   OrderbookSubscription,
   TradeSubscription,
+  CandleSubscription,
 } from "../websocket/Subscriber";
 import { NordError } from "../error";
 
@@ -108,6 +111,7 @@ export class Nord {
    * @param trades - Market symbols to subscribe to for trade updates
    * @param deltas - Market symbols to subscribe to for orderbook delta updates
    * @param accounts - Account IDs to subscribe to for account updates
+   * @param candles - Candle subscriptions with symbol and resolution
    * @returns A new WebSocket client with the requested subscriptions
    * @throws {NordError} If invalid subscription options are provided
    *
@@ -129,10 +133,12 @@ export class Nord {
     trades,
     deltas,
     accounts,
+    candles,
   }: Readonly<{
     trades?: string[];
     deltas?: string[];
     accounts?: number[];
+    candles?: Array<{ symbol: string; resolution: CandleResolution }>;
   }>): NordWebSocketClient {
     const subscriptions: SubscriptionPattern[] = [];
 
@@ -159,6 +165,33 @@ export class Nord {
           );
         }
         subscriptions.push(`account@${accountId}` as SubscriptionPattern);
+      });
+    }
+
+    if (candles && candles.length > 0) {
+      candles.forEach(({ symbol, resolution }) => {
+        if (!symbol || typeof symbol !== "string") {
+          throw new NordError("Invalid market symbol");
+        }
+
+        const allowedResolutions: CandleResolution[] = [
+          "1",
+          "5",
+          "15",
+          "30",
+          "60",
+          "1D",
+          "1W",
+          "1M",
+        ];
+
+        if (!allowedResolutions.includes(resolution)) {
+          throw new NordError("Invalid candle resolution");
+        }
+
+        subscriptions.push(
+          `candle@${symbol}:${resolution}` as SubscriptionPattern,
+        );
       });
     }
 
@@ -400,6 +433,33 @@ export class Nord {
 
     subscription.close = () => {
       wsClient.removeListener("delta", handleDelta);
+      subscription.removeAllListeners();
+    };
+
+    return subscription;
+  }
+
+  public subscribeBars(
+    symbol: string,
+    resolution: CandleResolution,
+  ): CandleSubscription {
+    if (!symbol || typeof symbol !== "string") {
+      throw new NordError("Invalid market symbol");
+    }
+
+    const subscription = new EventEmitter() as CandleSubscription;
+    const wsClient = this.createWebSocketClient({
+      candles: [{ symbol, resolution }],
+    });
+
+    const handleCandle = (update: WebSocketCandleUpdate) => {
+      subscription.emit("message", update);
+    };
+
+    wsClient.on("candle", handleCandle);
+
+    subscription.close = () => {
+      wsClient.removeListener("candle", handleCandle);
       subscription.removeAllListeners();
     };
 

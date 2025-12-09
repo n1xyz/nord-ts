@@ -2,6 +2,7 @@ import {
   WebSocketTradeUpdate,
   WebSocketDeltaUpdate,
   WebSocketAccountUpdate,
+  WebSocketCandleUpdate,
 } from "../types";
 
 /**
@@ -14,6 +15,7 @@ export interface NordWebSocketEvents {
   trade: (update: WebSocketTradeUpdate) => void;
   delta: (update: WebSocketDeltaUpdate) => void;
   account: (update: WebSocketAccountUpdate) => void;
+  candle: (update: WebSocketCandleUpdate) => void;
 }
 
 /**

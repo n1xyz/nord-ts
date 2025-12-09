@@ -7,7 +7,7 @@ import { Connection } from "@solana/web3.js";
 /**
  * Nord subscription type for trades or deltas
  */
-export type SubscriptionType = "trades" | "deltas" | "account";
+export type SubscriptionType = "trades" | "deltas" | "account" | "candle";
 
 /**
  * Pattern for a valid Nord subscription
@@ -246,6 +246,16 @@ export enum WebSocketMessageType {
   AccountUpdate = "account",
 }
 
+export type CandleResolution =
+  | "1"
+  | "5"
+  | "15"
+  | "30"
+  | "60"
+  | "1D"
+  | "1W"
+  | "1M";
+
 /**
  * WebSocket trade update message
  */
@@ -305,10 +315,22 @@ export interface WebSocketAccountUpdate {
   balances: Record<string, number>;
 }
 
+export interface WebSocketCandleUpdate {
+  res: CandleResolution;
+  mid: number;
+  t: number;
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+  v: number;
+}
+
 export type WebSocketMessage =
   | { trades: WebSocketTradeUpdate }
   | { delta: WebSocketDeltaUpdate }
-  | { account: WebSocketAccountUpdate };
+  | { account: WebSocketAccountUpdate }
+  | WebSocketCandleUpdate;
 
 export interface SPLTokenInfo {
   mint: string;

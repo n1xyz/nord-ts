@@ -4,6 +4,7 @@ import {
   WebSocketAccountUpdate,
   WebSocketDeltaUpdate,
   WebSocketMessage,
+  WebSocketCandleUpdate,
   WebSocketTradeUpdate,
 } from "../types";
 import { NordWebSocketClientEvents } from "./events";
@@ -25,7 +26,7 @@ type BrowserWebSocket = {
 
 type WebSocketInstance = WebSocket | BrowserWebSocket;
 
-const VALID_STREAM_TYPES = ["trades", "delta", "account"];
+const VALID_STREAM_TYPES = ["trades", "delta", "deltas", "account", "candle"];
 
 /**
  * WebSocket client for Nord exchange
@@ -298,7 +299,31 @@ export class NordWebSocketClient
       return;
     }
 
+    if (this.isCandleUpdate(message as Record<string, unknown>)) {
+      this.emit("candle", message as WebSocketCandleUpdate);
+      return;
+    }
+
     this.emit("error", new Error(`Unexpected message type: ${message}`));
+  }
+
+  private isCandleUpdate(message: unknown): message is WebSocketCandleUpdate {
+    if (!message || typeof message !== "object") {
+      return false;
+    }
+
+    const candidate = message as Record<string, unknown>;
+
+    return (
+      typeof candidate.res === "string" &&
+      typeof candidate.mid === "number" &&
+      typeof candidate.t === "number" &&
+      typeof candidate.o === "number" &&
+      typeof candidate.h === "number" &&
+      typeof candidate.l === "number" &&
+      typeof candidate.c === "number" &&
+      typeof candidate.v === "number"
+    );
   }
 
   /**

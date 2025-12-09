@@ -26,7 +26,12 @@ export {
  */
 export function initWebSocketClient(
   webServerUrl: string,
-  subscriptions?: SubscriptionPattern[] | "trades" | "delta" | "account",
+  subscriptions?:
+    | SubscriptionPattern[]
+    | "trades"
+    | "delta"
+    | "account"
+    | "candle",
 ): NordWebSocketClient {
   try {
     // Determine URL and subscriptions based on parameters
@@ -90,9 +95,13 @@ export function initWebSocketClient(
 function validateSubscription(subscription: string): void {
   const [type, param] = subscription.split("@");
 
-  if (!type || !param || !["trades", "deltas", "account"].includes(type)) {
+  if (
+    !type ||
+    !param ||
+    !["trades", "deltas", "account", "candle"].includes(type)
+  ) {
     throw new NordError(
-      `Invalid subscription format: ${subscription}. Expected format: "trades@SYMBOL", "deltas@SYMBOL", or "account@ID"`,
+      `Invalid subscription format: ${subscription}. Expected format: "trades@SYMBOL", "deltas@SYMBOL", "account@ID", or "candle@SYMBOL:RESOLUTION"`,
     );
   }
 
@@ -101,5 +110,14 @@ function validateSubscription(subscription: string): void {
     throw new NordError(
       `Invalid account ID in subscription: ${subscription}. Account ID must be a number.`,
     );
+  }
+
+  if (type === "candle") {
+    const [symbol, resolution] = param.split(":");
+    if (!symbol || !resolution) {
+      throw new NordError(
+        `Invalid candle subscription format: ${subscription}. Expected format: "candle@SYMBOL:RESOLUTION"`,
+      );
+    }
   }
 }

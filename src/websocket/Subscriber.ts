@@ -4,9 +4,9 @@ import {
   DeltaEvent,
   WebSocketDeltaUpdate,
   SubscriberConfig,
-  StreamTrade,
   Trades,
   WebSocketTradeUpdate,
+  WebSocketCandleUpdate,
 } from "../types";
 import { MAX_BUFFER_LEN } from "../utils";
 
@@ -51,6 +51,13 @@ export interface OrderbookSubscription extends EventEmitter {
  */
 export interface TradeSubscription extends EventEmitter {
   on(event: "message", listener: (data: WebSocketTradeUpdate) => void): this;
+  on(event: "error", listener: (error: Error) => void): this;
+  close(): void;
+  removeAllListeners(event?: string): this;
+}
+
+export interface CandleSubscription extends EventEmitter {
+  on(event: "message", listener: (data: WebSocketCandleUpdate) => void): this;
   on(event: "error", listener: (error: Error) => void): this;
   close(): void;
   removeAllListeners(event?: string): this;
