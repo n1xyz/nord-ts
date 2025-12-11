@@ -83,7 +83,7 @@ export type AccountTriggerInfo = components["schemas"]["TriggerInfo"];
 export type TriggerHistoryPage =
   components["schemas"]["PageResult_for_String_and_Trigger"];
 export type WithdrawalHistoryPage =
-  components["schemas"]["PageResult_for_String_and_Withdrawal"];
+  components["schemas"]["PageResult_for_String_and_WithdrawalInfo"];
 export type FeeTierConfig = components["schemas"]["FeeTierConfig"];
 export type FeeTierId = components["schemas"]["FeeTierId"];
 export type TokenStats = components["schemas"]["TokenStats"];
@@ -97,7 +97,7 @@ export type AccountVolumeInfo = components["schemas"]["AccountVolumeInfo"];
 export type GetPrevMarketPriceQuery =
   components["schemas"]["GetPrevMarketPriceQuery"];
 export type PreviousMarketPrice = components["schemas"]["PreviousMarketPrice"];
-export type WithdrawalInfo = components["schemas"]["Withdrawal"];
+export type WithdrawalInfo = components["schemas"]["WithdrawalInfo"];
 
 /**
  * Configuration options for the Nord client
