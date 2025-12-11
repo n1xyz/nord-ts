@@ -38,6 +38,7 @@ import {
   AtomicSubaction,
 } from "../actions";
 import { NordError } from "../error";
+import bs58 from "bs58";
 import { Nord } from "./Nord";
 
 /**
@@ -551,14 +552,17 @@ export class NordUser {
    *
    * @param tokenId - Token ID to withdraw
    * @param amount - Amount to withdraw
+   * @param destPubkey - Optional destination registration pubkey (base58); defaults to session owner
    * @throws {NordError} If the operation fails
    */
   async withdraw({
     amount,
     tokenId,
+    destPubkey,
   }: Readonly<{
     tokenId: number;
     amount: number;
+    destPubkey?: string;
   }>): Promise<{ actionId: bigint }> {
     try {
       this.checkSessionValidity();
@@ -573,6 +577,7 @@ export class NordUser {
           sessionId: BigInt(optExpect(this.sessionId, "No session")),
           tokenId,
           amount: scaledAmount,
+          destPubkey: destPubkey ? bs58.decode(destPubkey) : undefined,
         }),
       });
       expectReceiptKind(receipt, "withdrawResult", "withdraw");
