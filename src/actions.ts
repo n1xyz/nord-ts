@@ -157,7 +157,7 @@ export async function createSession(
     case: "createSession",
     value: create(proto.Action_CreateSessionSchema, {
       userPubkey: params.userPubkey.toBytes(),
-      blstPubkey: params.sessionPubkey.toBytes(),
+      sessionPubkey: params.sessionPubkey.toBytes(),
       expiryTimestamp: expiry,
     }),
   });
